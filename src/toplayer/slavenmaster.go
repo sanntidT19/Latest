@@ -1,4 +1,4 @@
-package test
+package slavenmaster
 
 import (
 	. "chansnstructs"
@@ -8,8 +8,6 @@ import (
 	"time"
 )
 
-//WE MAY NEED TO MAKE A COPY, I DO NOT KNOW IF WE CAN ITERATE THROUGH THE MAPS WHILE WE ARE WRITING TO IT. HOW DO WE RLOCK AN IF-STATEMENT IN THIS CASE?
-//Masters functions, pick good names.
 var InLogicChans InternalLogicChannels
 
 type InternalLogicChannels struct {
@@ -18,7 +16,70 @@ type InternalLogicChannels struct {
 	ToMasterUpdateStateChan chan IpState
 	ExternalListIsUpdated   chan bool
 }
+func Active_slave(ExternalList map[*UDPAddr]*[N_FLOORS][2]bool) map[*UDPAddr]*[N_FLOORS][2]bool {
+	localAddr := getLocalIp()
+	//localIp, err := LookupHost(PORT)
+	//localAddr, err := ResolveUDPAddr("udp", localIp)
 
+	s := Slave{}
+	s.IP = localAddr
+	//buf := make([]byte, 1024)
+	address, err := ResolveUDPAddr("udp", ":20019") //leser bare fra porten generellt
+	conn, err := ListenUDP("udp", address)
+
+	if err != nil {
+		fmt.Println("backup conn create error:", err)
+	}
+	//localAddr is updated in receive
+	go Receive()
+	go Select_receive()
+	go Select_send_slave()
+	go Write_to_network(conn)
+
+	ExSlaveChans.ToCommNetworkInitChan <- IpOrderList{}
+	var ipOrdList IpOrderList
+	ipVarList := make([]*UDPAddr, N_ELEV)
+	var i int
+
+	go func() {
+		select {
+		case ipOrdList = <-ExCommChans.ToSlaveNetworkInitRespChan:
+			ipVarList[i] = ipOrdList.Ip
+			i++
+		}
+	}()
+
+	//VELGER MASTER
+	tempBestMaster := ipVarList[0]
+	for i := 1; i < len(ipVarList); i++ {
+		if IpSum(tempBestMaster) < IpSum(ipVarList[i]) {
+			tempBestMaster = ipVarList[i]
+		}
+	}
+	if localAddr == tempBestMaster {
+		go Active_master(ExternalList)
+	}
+
+	conn.Close()
+	return ExternalList
+}
+
+func Active_master(ExternalList map[*UDPAddr]*[N_FLOORS][2]bool) {
+	address, _ := ResolveUDPAddr("udp", "129.241.187.255"+PORT)
+	conn, _ := DialUDP("udp", nil, address)
+
+	fmt.Println("Master")
+	go Write_to_network(conn)
+	go Select_receive()
+}
+
+func IpSum(addr *UDPAddr) (sum byte) {
+	bArr, _ := Marshal(*addr)
+	for _, value := range bArr {
+		sum += value
+	}
+	return sum
+}
 func internal_logic_channels_init() {
 	InLogicChans.ToStateUpdater = make(chan IpState)
 	InLogicChans.ToTopLogicOrderChan = make(chan IpOrderMessage)
@@ -26,8 +87,8 @@ func internal_logic_channels_init() {
 	InLogicChans.ExternalListIsUpdated = make(chan bool)
 }
 
-func Master_top_logic(m Master) { //MAYBE THE MASTER TOP LOGIC SHOULD TALK TO THE SLAVE TOP LOGIC?
-	//Need to save the external arrays somewhere. WHERE?
+func Master_top_logic(m Master) {
+	
 	for {
 		select {
 		case ipOrder := <-InLogicChans.ToTopLogicOrderChan:
@@ -252,6 +313,7 @@ func Slave_Order_Outgoing() {
 			SyncOrderMap.Unlock()
 		}
 	}()
+
 }
 
 //No queueing necessary
@@ -289,15 +351,25 @@ func Slave_state_updated() {
 	}
 }
 
-func Check_slaves() {
+func (m master)Check_slaves() {
+	timer map[IpOrderMessage]time.Time
 	for {
-		<-ExCommChans.ToSlaveImMasterChan
-		Network_init(ExternalList)
+		select {
+		case slavesIpOrder <-ExCommChans.ToSlaveImMasterChan:
+
+		}
+
+
+		for key, _; range timer  {
+			if timer[key] > MAXWAIT_IM_HERE
+		}
+		Restart_system(ExternalList)
 	}
 }
 func Check_master() {
 	for {
+
 		<-ExCommChans.ToSlaveImMasterChan
-		Network_init(ExternalList)
+		Restart_system(ExternalList)
 	}
 }
