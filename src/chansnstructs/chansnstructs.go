@@ -1,24 +1,25 @@
 package chansnstruct
 
 import (
+	"fmt"
 	. "net"
-	"os"
 	"time"
 )
 
 const (
-	UP         = 0 // is this correct?
-	DOWN       = 1 // si this correct?
-	N_BUTTONS  = 8 // @Yngve is this correct??
-	MAXWAIT    = 5 * time.Second
-	PORT       = ":20019"
-	N_FLOORS   = 4
-	N_ELEV     = 3
-	TIMEOFSTOP = 1 // Time spent in one floor
-	TIMETRAVEL = 2 // Time of travel between floors
-	LOCALHOST  = "129.241.187.157"
-	IP1        = "129.241.187.147"
-	IP2        = "129.241.187.153"
+	UP              = 0 // is this correct?
+	DOWN            = 1 // si this correct?
+	N_BUTTONS       = 8 // @Yngve is this correct??
+	MAXWAIT         = 5 * time.Second
+	MAXWAIT_IM_HERE = 50 * time.Millisecond
+	PORT            = ":20019"
+	N_FLOORS        = 4
+	N_ELEV          = 3
+	TIMEOFSTOP      = 1 // Time spent in one floor
+	TIMETRAVEL      = 2 // Time of travel between floors
+	LOCALHOST       = "129.241.187.157"
+	IP1             = "129.241.187.147"
+	IP2             = "129.241.187.153"
 	//IP3 = 129.241.187.xxx
 )
 
@@ -29,8 +30,6 @@ var ExCommChans ExternalCommunicationChannels
 var ExStateMChans ExternalStateMachineChannels
 var ExOptimalChans ExternalOptimalizationChannels
 
-var InteruptChan chan os.Signal
-
 type Master struct {
 	SlaveIp      []*UDPAddr
 	ExternalList map[*UDPAddr]*[N_FLOORS][2]bool
@@ -38,7 +37,7 @@ type Master struct {
 }
 
 type Slave struct {
-	IP           *UDPAddr
+	Ip           *UDPAddr
 	ExternalList map[*UDPAddr]*[N_FLOORS][2]bool
 	InternalList []bool
 	CurrentFloor int
@@ -67,12 +66,14 @@ type IpOrderList struct {
 	Ip           *UDPAddr
 	ExternalList map[*UDPAddr]*[N_FLOORS][2]bool
 }
+type IpByteArr struct {
+	Ip   *UDPAddr
+	Barr []byte
+}
 
 type NetworkExternalChannels struct {
-	ToNetwork  chan []byte
-	ToComm     chan []byte
-	ToCommAddr chan *UDPAddr
-	StopWrite  chan bool
+	ToNetwork chan []byte
+	ToComm    chan IpByteArr
 }
 type ExternalOptimalizationChannels struct {
 	//InMasterChans.OptimizationInitChan = make(chan Master)
@@ -107,7 +108,7 @@ type ExternalSlaveChannels struct {
 	ToCommExternalButtonPushedChan     chan Order          //"ebp"
 	ToCommImSlaveChan                  chan IpOrderMessage //"ias"
 	ToCommButtonPressedConfirmedChan   chan Order          //"bpc"
-	ToCommUpdatedStateChan             chan State          //"ust"
+	ToCommUpdatedStateChan             chan IpState        //"ust"
 
 }
 type ExternalMasterChannels struct {
@@ -119,7 +120,7 @@ type ExternalMasterChannels struct {
 type ExternalStateMachineChannels struct {
 	ButtonPressedChan      chan Order
 	OrderServedChan        chan Order
-	CurrentStateChan       chan State
+	CurrentStateChan       chan IpState
 	GetSlaveStructChan     chan bool
 	ReturnSlaveStructChan  chan Slave
 	DirectionUpdateChan    chan int
@@ -128,18 +129,20 @@ type ExternalStateMachineChannels struct {
 }
 
 func Channels_init() {
+	fmt.Println("start channels init")
 	network_external_chan_init()
 	Communication_external_channels_init()
 	Slave_external_chans_init()
 	Master_external_chans_init()
 	Master_external_chans_init()
 	External_state_machine_channels_init()
+	fmt.Println("start channels exit")
 }
 
 func network_external_chan_init() {
 	ExNetChans.ToNetwork = make(chan []byte)
-	ExNetChans.ToComm = make(chan []byte)
-	ExNetChans.ToCommAddr = make(chan *UDPAddr)
+	ExNetChans.ToComm = make(chan IpByteArr)
+
 }
 
 func Communication_external_channels_init() {
@@ -166,7 +169,7 @@ func Slave_external_chans_init() {
 	ExSlaveChans.ToCommOrderExecutedReConfirmedChan = make(chan Order) //"oce"
 	ExSlaveChans.ToCommExternalButtonPushedChan = make(chan Order)     //"ebp"
 	ExSlaveChans.ToCommImSlaveChan = make(chan IpOrderMessage)
-	ExSlaveChans.ToCommUpdatedStateChan = make(chan State)
+	ExSlaveChans.ToCommUpdatedStateChan = make(chan IpState)
 	ExSlaveChans.ToCommNetworkInitRespChan = make(chan IpOrderList)
 	ExSlaveChans.ToCommNetworkInitChan = make(chan IpOrderList)
 
@@ -180,7 +183,7 @@ func Master_external_chans_init() {
 func External_state_machine_channels_init() {
 	ExStateMChans.ButtonPressedChan = make(chan Order)
 	ExStateMChans.OrderServedChan = make(chan Order)
-	ExStateMChans.CurrentStateChan = make(chan State)
+	ExStateMChans.CurrentStateChan = make(chan IpState)
 	ExStateMChans.GetSlaveStructChan = make(chan bool)
 	ExStateMChans.ReturnSlaveStructChan = make(chan Slave)
 	ExStateMChans.DirectionUpdateChan = make(chan int)
@@ -203,5 +206,5 @@ func (s Slave) Overwrite_external_list(newExternalList map[*UDPAddr]*[N_FLOORS][
 	s.ExternalList = newExternalList
 }
 func (s Slave) Get_ip() *UDPAddr {
-	return s.IP
+	return s.Ip
 }
