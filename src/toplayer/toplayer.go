@@ -8,6 +8,7 @@ import (
 	"fmt"
 	. "net"
 	"os"
+	"os/exec"
 	//. "statemachine"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ type InternalLogicChannels struct {
 	ToTopLogicOrderChan     chan IpOrderMessage
 	ToMasterUpdateStateChan chan IpState
 	ExternalListIsUpdated   chan bool
+	NetworkInitRespChan     chan *UDPAddr
 }
 
 func internal_logic_channels_init() {
@@ -29,16 +31,15 @@ func internal_logic_channels_init() {
 	InLogicChans.ToTopLogicOrderChan = make(chan IpOrderMessage)
 	InLogicChans.ToMasterUpdateStateChan = make(chan IpState)
 	InLogicChans.ExternalListIsUpdated = make(chan bool)
+	InLogicChans.NetworkInitRespChan = make(chan *UDPAddr)
 }
 
 func Active_slave() {
 	fmt.Println("start slave")
-	//localAddr := GetLocalIp()
-	//localIp, err := LookupHost(PORT)
-	localAddr, _ := ResolveUDPAddr("udp", PORT) // this only gives the port
-	fmt.Println(localAddr)
-	s := Slave{}
-	s.Ip = localAddr
+	var localAddr *UDPAddr
+	//s := Slave{}
+
+	//s.Ip = localAddr
 	//buf := make([]byte, 1024)
 
 	fmt.Println("connection init")
@@ -49,43 +50,54 @@ func Active_slave() {
 	go Select_send_slave()
 	go Write_to_network()
 
-	var ipOrd IpOrderList
+	go func() {
+		fmt.Println("to channel")
+		ipOrd := IpOrderList{}
+		ExSlaveChans.ToCommNetworkInitChan <- ipOrd
+	}()
+	time.Sleep(time.Second)
 	ipVarList := make([]*UDPAddr, N_ELEV)
+	//ipVarList[0] = localAddr
 
-	ExSlaveChans.ToCommNetworkInitChan <- IpOrderList{}
-
-	tick := time.After(500 * time.Millisecond)
-
+	var ipOrd IpOrderList
+	tick := time.After(5000 * time.Millisecond)
 	for {
 		fmt.Println("forloop")
 
 		select {
 		case ipOrd = <-ExCommChans.ToSlaveNetworkInitRespChan:
+			fmt.Println("case 2")
 			isInList := false
 			for i := 0; i < N_ELEV; i++ {
+				fmt.Println("test1")
 				if ipVarList[i] == ipOrd.Ip {
 					isInList = true
 				}
+				fmt.Println("test1")
 				if isInList {
 					ipVarList[i] = ipOrd.Ip
 				}
 
 			}
+
 		case <-tick:
+			fmt.Println("case 3")
 			break
 		}
 		fmt.Println("ipOrderList", ipOrd)
+		//break /////////////////////???????????? it dont trigger the first break to break forloop
 	}
 
 	fmt.Println("velger master")
 	//VELGER MASTER
+	fmt.Println("ipVarList", ipVarList)
 	tempBestMaster := ipVarList[0]
 	for i := 1; i < len(ipVarList); i++ {
 		if IpSum(tempBestMaster) > IpSum(ipVarList[i]) {
 			tempBestMaster = ipVarList[i]
 		}
 	}
-	fmt.Println("localAddr", localAddr)
+	//fmt.Println("localAddr", localAddr)
 	fmt.Println("tempBestMaster", tempBestMaster)
 	if localAddr == tempBestMaster {
 		fmt.Println("this is master")
@@ -116,9 +128,7 @@ func Active_master() {
 }
 
 func IpSum(addr *UDPAddr) (sum byte) {
-	fmt.Println("addr", addr)
 	bArr, _ := Marshal(addr)
-	fmt.Println("ipsum byte array: ", string(bArr))
 	for _, value := range bArr {
 		sum += value
 	}
@@ -426,7 +436,10 @@ func Check_master() {
 func Restart_system() {
 	for {
 		<-RestartSystemChan
-		os.Exit(666)
+		ExSlaveChans.ToCommRestartSystemChan <- true
+		defer os.Exit(666)
+		cmd := exec.Command("mate-terminal", "-x", EXE_FILE)
+		cmd.Run()
 		//needs to use external list
 
 	}

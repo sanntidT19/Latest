@@ -17,8 +17,9 @@ const (
 	N_ELEV          = 3
 	TIMEOFSTOP      = 1 // Time spent in one floor
 	TIMETRAVEL      = 2 // Time of travel between floors
+	EXE_FILE        = "main"
 	LOCALHOST       = "129.241.187.157"
-	IP1             = "129.241.187.147"
+	IP1             = "129.241.187.153"
 	IP2             = "129.241.187.153"
 	//IP3 = 129.241.187.xxx
 )
@@ -97,7 +98,7 @@ type ExternalCommunicationChannels struct {
 	ToSlaveButtonPressedConfirmedChan chan IpOrderMessage //"bpc"-
 	ToSlaveUpdateStateReceivedChan    chan IpState        //"sus"-
 	ToSlaveImMasterChan               chan string         //"iam"-
-
+	ToSlaveRestartSystemTriggerChan   chan bool           //"ree"
 }
 type ExternalSlaveChannels struct {
 	ToCommNetworkInitChan              chan IpOrderList    //"ini"
@@ -109,7 +110,7 @@ type ExternalSlaveChannels struct {
 	ToCommImSlaveChan                  chan IpOrderMessage //"ias"
 	ToCommButtonPressedConfirmedChan   chan Order          //"bpc"
 	ToCommUpdatedStateChan             chan IpState        //"ust"
-
+	ToCommRestartSystemChan            chan bool
 }
 type ExternalMasterChannels struct {
 	ToCommOrderListChan              chan IpOrderList    //"ord"
@@ -160,6 +161,7 @@ func Communication_external_channels_init() {
 	ExCommChans.ToSlaveNetworkInitRespChan = make(chan IpOrderList)              //"inr"
 	ExCommChans.ToSlaveNetworkInitChan = make(chan IpOrderList)                  //"ini"
 	ExCommChans.ToSlaveUpdateStateReceivedChan = make(chan IpState)              //"sus"
+	ExCommChans.ToSlaveRestartSystemTriggerChan = make(chan bool)                //"ree"
 
 }
 
@@ -172,6 +174,7 @@ func Slave_external_chans_init() {
 	ExSlaveChans.ToCommUpdatedStateChan = make(chan IpState)
 	ExSlaveChans.ToCommNetworkInitRespChan = make(chan IpOrderList)
 	ExSlaveChans.ToCommNetworkInitChan = make(chan IpOrderList)
+	ExSlaveChans.ToCommRestartSystemChan = make(chan bool) //"ree"
 
 }
 func Master_external_chans_init() {
