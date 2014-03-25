@@ -41,7 +41,6 @@ type InternalStateMachineChannels struct {
 	goToFloorChan         chan int
 	buttonUpdatedChan     chan Order
 	toChooseNextOrderChan chan bool
-
 }
 
 func Internal_state_machine_channels_init() {
@@ -60,17 +59,16 @@ func Internal_state_machine_channels_init() {
 
 // /*orderArrayChan chan [][] int   <- this will come from above, but not in this test program  /* this may need to have a different name ->  ,currentStateChan chan State
 func Elevator_manager() {
-	var crrentState State
-	var externalArray [N_FLOORS][2] bool
-	var internalList [N_FLOORS] bool
+	var currentState IpState
+	var externalArray [N_FLOORS][2]bool
+	var internalList [N_FLOORS]bool
 	driver.Elev_init()
 
 	//currentStateChan <- State{driver.Elev_get_direction(), driver.Elev_get_floor_sensor_signal()}
 
 	//buttonSliceChan := Create_button_chan_slice()
 	//lightSliceChan := Create_button_chan_slice()
-	go Executer()
-	fmt.Println("1")
+
 	go Elevator_worker()
 	fmt.Println("ew")
 	go Light_updater()
@@ -81,20 +79,20 @@ func Elevator_manager() {
 	fmt.Println("sotw")
 	go Button_updater()
 	fmt.Println("2")
-	for{
-		select{
-		case  currentState = <- InStateMChans.currentStateChan:
+	for {
+		select {
+		case currentState = <-InStateMChans.currentStateChan:
 			ExStateMChans.CurrentStateChan <- currentState
-			InStateMChans.LocalCurrentStateChan <- currentState NEW CHANNEL
-		case orderServed := <- InStateMChans.orderServedChan:
-			ExStateMChans.OrderServedChan <-orderServed
-			InStateMChans.toChooseNextOrderChan <-orderServed   NEW CHANNEL
-		case internalOrder := <- InStateMChans.internalButtPressChan:
-			internalList[internalOrder.floor]  = true
+			InStateMChans.LocalCurrentStateChan <- currentState //NEW CHANNEL
+		case orderServed := <-InStateMChans.orderServedChan:
+			ExStateMChans.OrderServedChan <- orderServed
+			InStateMChans.toChooseNextOrderChan <- orderServed //NEW CHANNEL
+		case internalOrder := <-InStateMChans.internalButtPressChan:
+			internalList[internalOrder.floor] = true
 			InStateMchans.commandLightsChan <- interalList
-			InStateMChans.orderArrayChan<-externalArray
+			InStateMChans.orderArrayChan <- externalArray
 			InStateMchans.commandOrderChan <- internalList
-		case externalArray = <- ExStateMChans.SingleExternalListChan:
+		case externalArray = <-ExStateMChans.SingleExternalListChan:
 			InStateMChans.orderArrayChan <- externalArray
 			InStateMChans.commandOrderChan <- internalList
 		}
@@ -136,18 +134,18 @@ func Elevator_worker() {
 				InStateMChans.currentStateChan <- State{currentDir, currentFloor}
 			}
 			/*	//Your last floor was the current floor, but something may have been pulled, so you dont know where you lie relative to it. Cant use direction.
-			} else if gtf == currentFloor { //this may now go all the time
-				//Using previousfloor can give you an idea in some cases.
-				if previousFloor > currentFloor {
-					InStateMChans.speedChan <- MAX_SPEED_UP
-					currentDir = DIR_UP
-					InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-				} else if previousFloor < currentFloor { //This will also be the case if prevFloor is undefined (-1) They can never be the same.
-					InStateMChans.speedChan <- MAX_SPEED_DOWN
-					currentDir = DIR_DOWN
-					InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-				}*/
-	
+				} else if gtf == currentFloor { //this may now go all the time
+					//Using previousfloor can give you an idea in some cases.
+					if previousFloor > currentFloor {
+						InStateMChans.speedChan <- MAX_SPEED_UP
+						currentDir = DIR_UP
+						InStateMChans.currentStateChan <- State{currentDir, currentFloor}
+					} else if previousFloor < currentFloor { //This will also be the case if prevFloor is undefined (-1) They can never be the same.
+						InStateMChans.speedChan <- MAX_SPEED_DOWN
+						currentDir = DIR_DOWN
+						InStateMChans.currentStateChan <- State{currentDir, currentFloor}
+					}*/
+
 		//New floor is reached and therefore shit is updated
 		case cf := <-InStateMChans.privateSensorChan:
 			previousFloor = currentFloor
@@ -349,20 +347,20 @@ func Button_updater() { //Sending the struct a level up, to the state machine se
 //If we get time: see how we can make this more dynamic. Yhis also turns off if the bool is false.
 func Light_updater() {
 	fmt.Println("light updater")
-	
+
 	for {
 		select {
-			case lightArray := <- ExCommChans.LightChan:
-			for i := 0; i < N_FLOORS{
-				for j :=0 ; i < N_BUTTONS -1{
+		case lightArray := <-ExCommChans.LightChan:
+			for i := 0; i < N_FLOORS; i++ {
+				for j := 0; i < N_BUTTONS-1; j++ {
 					driver.Elev_set_button_lamp(i, j, lightArray[i][j])
-					InStateMChans.orderUpdatedChan <- Order{i,j,lightArray[i][j]} NEW CHANNEL
+					InStateMChans.orderUpdatedChan <- Order{i, j, lightArray[i][j]}
 				}
 			}
-			case commandLights := <- InStateMChans.commandLightsChan:
-			for i := 0;  i < N_FLOORS{
-				driver.Elev_set_button_lamp(i,COMMAND,commandLights[i])
-				InStateMChans.orderUpdatedChan <- Order{i,COMMAND,commandLights[i]} 
+		case commandLights := <-InStateMChans.commandLightsChan:
+			for i := 0; i < N_FLOORS; i++ {
+				driver.Elev_set_button_lamp(i, COMMAND, commandLights[i])
+				InStateMChans.orderUpdatedChan <- Order{i, COMMAND, commandLights[i]}
 			}
 		}
 	}

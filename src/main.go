@@ -1,18 +1,30 @@
 package main
 
 import (
-	//"chansnstructs"
+	. "chansnstructs"
 	"fmt"
+	. "net"
+	"time"
+	//)	. "toplayer"
 )
 
 func main() {
-	externalList :=
-		init(externalList, true)
-}
-func Init_elvator() {
+	var externalList map[*UDPAddr]*[N_FLOORS][2]bool
+	//Init_elevator(externalList, true)
 	Channels_init()
-	go Active_slave()
+	Active_slave(externalList)
+	time.Sleep(100 * time.Secound)
+	//blockingChan := make(chan bool)
+	//<-blockingChan
+}
 
-	blockingChan := make(chan bool)
-	<-blocingChan
+func Init_elevator(externalList map[*UDPAddr]*[N_FLOORS][2]bool, firstRun bool) {
+
+	Channels_init()
+	go Active_slave(externalList)
+
+	time.Sleep(100 * time.Secound)
+	//blockingChan := make(chan bool)
+	//<-blockingChan
+
 }
