@@ -36,7 +36,7 @@ func Select_send_slave() {
 	for {
 		select {
 		//Slave
-		case ipOrdList <- ExSlaveChans.ToCommNetworkInitChan:
+		case ipOrdList := <-ExSlaveChans.ToCommNetworkInitChan:
 			Send_network_init(ipOrdList)
 		case ipOrdList := <-ExSlaveChans.ToCommNetworkInitRespChan:
 			Send_network_init_response(ipOrdList)
@@ -62,7 +62,7 @@ func internal_comm_chans_init() {
 	InCommChans.slaveToStateExMasterChanshan = make(chan int) //send input to statemachine
 }
 
-func Send_network_init() {
+func Send_network_init(ordList IpOrderList) {
 	byteOrder, _ := Marshal(ordList.ExternalList)
 	prefix, _ := Marshal("ini")
 	ExNetChans.ToNetwork <- append(prefix, byteOrder...)
@@ -272,9 +272,10 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 
 	case string(message[1:4]) == "ree":
 		noPrefix := message[5:]
-		var trigger bool
-		_ = Unmarshal(noPrefix, &trigger)
-		ExCommChans.ToSlaveRestartSystemTriggerChan <- trigger
+		ipOrd := IpOrderList{}
+		_ = Unmarshal(noPrefix, &ipOrd)
+		ipOrd.Ip = addr
+		ExCommChans.ToSlaveRestartSystemTriggerChan <- ipOrd
 
 	default:
 
