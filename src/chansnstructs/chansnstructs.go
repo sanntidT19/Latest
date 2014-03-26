@@ -33,7 +33,7 @@ var ExOptimalChans ExternalOptimalizationChannels
 
 type Master struct {
 	SlaveIp      []*UDPAddr
-	ExternalList map[*UDPAddr]*[N_FLOORS][2]bool
+	ExternalList map[*UDPAddr][N_FLOORS][2]bool
 	Statelist    map[*UDPAddr]IpState
 }
 
@@ -200,8 +200,17 @@ func External_optimization_channel_init() {
 
 //MEMBER FUNCTIONS
 func (m Master) Set_external_list_order(ip *UDPAddr, floor int, buttonType int, ipOrder IpOrderMessage) {
-	m.ExternalList[ip][floor][buttonType] = ipOrder.Ord.TurnOn
+	fmt.Println("HEYOOOOOO")
+	var temp [N_FLOORS][2]bool
+	temp = m.ExternalList[ip]
+	temp[floor][buttonType] = ipOrder.Ord.TurnOn
+	fmt.Println("HEYOOOOOOfmt.Println(")
+	m.ExternalList[ip] = temp
+
+	fmt.Println(m)
 }
+
+/*
 func (m Master) Get_external_list() map[*UDPAddr]*[N_FLOORS][2]bool {
 	return m.ExternalList
 }
@@ -211,3 +220,4 @@ func (s Slave) Overwrite_external_list(newExternalList map[*UDPAddr]*[N_FLOORS][
 func (s Slave) Get_ip() *UDPAddr {
 	return s.Ip
 }
+*/

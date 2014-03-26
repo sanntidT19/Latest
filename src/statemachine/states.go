@@ -340,11 +340,8 @@ func Button_updater() { //Sending the struct a level up, to the state machine se
 					//fmt.Println("Here is drivers version of button pressed: ", buttonVar)
 					//fmt.Println("floor and button:", i, j)
 					if buttonVar == 1 && j != driver.COMMAND {
-						fmt.Println("	1.External Button Pressed")
 						ExStateMChans.ButtonPressedChan <- Order{i, j, true} // YO! Need to make this one sexier. Maybe one channel for each button
-						fmt.Println("	2.External Button Pressed")
 						buttonMatrix[i][j] = 1
-						fmt.Println("	3.External Button Pressed")
 						//Confirm press to avoid spamming
 					} else if buttonVar == 1 && j == driver.COMMAND {
 						buttonMatrix[i][j] = 1 //Confirm press to avoid spamming

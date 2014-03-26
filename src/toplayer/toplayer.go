@@ -18,6 +18,8 @@ var InLogicChans InternalLogicChannels
 var InteruptChan chan os.Signal
 var RestartSystemChan chan map[*UDPAddr]*[N_FLOORS][2]bool
 
+var standardArray [N_FLOORS][2]bool
+
 type InternalLogicChannels struct {
 	ToStateUpdater          chan IpState
 	ToTopLogicOrderChan     chan IpOrderMessage
@@ -35,12 +37,15 @@ func internal_logic_channels_init() {
 }
 
 func Activate_slave() {
+
 	internal_logic_channels_init()
-	fmt.Println("start slave")
+	//fmt.Println("start slave")
 	var localAddr *UDPAddr
 
-	fmt.Println("connection init")
-
+	fmt.Println(localAddr)
+	fmt.Println("&standardarray", standardArray)
+	//standardArray = {{false, false}, {false ,false } ,{false ,false }, {false ,false }}
+	//fmt.Println("connection init")
 	go Receive()
 	go Select_receive()
 	go Select_send_slave()
@@ -51,7 +56,7 @@ func Activate_slave() {
 	ExSlaveChans.ToCommNetworkInitChan <- netInitTrigger
 	ipVarList := make([]*UDPAddr, N_ELEV)
 	var ipOrd IpOrderList
-	tick := time.After(500 * time.Millisecond)
+	tick := time.After(2000 * time.Millisecond)
 	check := true
 
 	ipAddressiter := 0
@@ -90,19 +95,21 @@ func Activate_slave() {
 			tempBestMaster = ipVarList[i]
 		}
 	}
-
+	fmt.Println("tempbestmaster: ", tempBestMaster)
+	fmt.Println("localaddr : ", localAddr)
+	localAddr = tempBestMaster // WE NEED TO FIND THE LOCAL IP SOMEHOW
 	//fmt.Println("localAddr", localAddr)
-
+	fmt.Println("EQUALITYYY", localAddr == tempBestMaster)
 	//fmt.Println("tempBestMaster", tempBestMaster)
-
+	m := Master{}
 	if localAddr == tempBestMaster {
-		m := Master{}
 		m.SlaveIp = ipVarList
-		//fmt.Println("this is master")
-		go Activate_master(&m)
-		fmt.Println("master= ", m)
-		go Check_slaves(&m.SlaveIp)
 
+		m.ExternalList[tempBestMaster] = standardArray
+		//fmt.Println("this is master")
+		go Activate_master(m) //&
+		fmt.Println("master= ", m)
+		go Check_slaves(m.SlaveIp) //&
 	}
 	//no else becauce the master is also a "slave"
 	s := Slave{}
@@ -125,16 +132,16 @@ func Activate_slave() {
 	fmt.Println("end of activeslave, after block")
 }
 
-func Activate_master(m *Master) {
+func Activate_master(m Master) { //*
 	fmt.Println("Starting Master")
 	//address, _ := ResolveUDPAddr("udp", "129.241.187.255"+PORT)
 	//conn, _ := DialUDP("udp", nil, address)
 
 	go Write_to_network()
 	go Select_receive()
-	go Master_top_logic(*m)
+	go Master_top_logic(&m) //&
 	go Master_updated_state_incoming()
-	go Master_updated_externalList_outgoing(*m)
+	go Master_updated_externalList_outgoing(&m) //&
 	go Master_incoming_order_executed()
 }
 
@@ -155,18 +162,19 @@ func Master_updated_state_incoming() {
 	}
 }
 
-func Master_top_logic(m Master) {
+func Master_top_logic(m *Master) {
 	for {
 		select {
 		case ipOrder := <-InLogicChans.ToTopLogicOrderChan:
 			fmt.Println("we have received from secure sending grid")
 			fmt.Println(ipOrder)
+			//m.ExternalList[ipOrder.Ip] = standardArray
 
 			if !ipOrder.Ord.TurnOn { // If order executed, just update the internal arrays and the updater will notify when updated. It will use IP smartly
 				m.Set_external_list_order(ipOrder.Ip, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
 				m.Set_external_list_order(nil, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
-				//m.ExternalList[nil][ipOrder.Order.Floor][ipOrder.Order.ButtonType] = ipOrder.Order.TurnOn
-
+				//m.ExternalList[nil][ipOrder.Ord.Floor][ipOrder.Ord.ButtonType] = ipOrder.Ord.TurnOn
+				fmt.Println("YOOOOOLOOOOOO")
 				InLogicChans.ExternalListIsUpdated <- true //THIS IS THE MAP WE MUST CHANGE. WE SHOULD DO THIS TOGETHER SINCE A LOT OF FUNCTIONALITY USES IT
 
 				//ToStateMachineArrayChan <- LocalMaster.AllArrays[LocalMaster.myIP]	WE NEED TO LOOK AT THIS FFS!!!!!!
@@ -265,7 +273,7 @@ func Slave_top_Logic() {
 	}
 
 }*/
-func Master_updated_externalList_outgoing(m Master) {
+func Master_updated_externalList_outgoing(m *Master) {
 	localSlaveMap := IpOrderList{}
 	//timerMap := make(map[*UDPAddr]time.Time)               //timers for each IP
 	startCountdownChan := make(chan bool)
@@ -281,7 +289,7 @@ func Master_updated_externalList_outgoing(m Master) {
 		for {
 			select {
 			case <-InLogicChans.ExternalListIsUpdated: //COMING FROM LOCAL STATEMACHINE -  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
-				localSlaveMap.ExternalList = m.Get_external_list()
+				//localSlaveMap.ExternalList = m.Get_external_list()
 				ExMasterChans.ToCommOrderListChan <- localSlaveMap //TO THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
 				startReceivingChan <- localSlaveMap.ExternalList
 				startCountdownChan <- true
@@ -309,28 +317,27 @@ func Master_updated_externalList_outgoing(m Master) {
 		for {
 			select {
 			case <-startReceivingChan:
-				countingSlaveMap = m.Get_external_list()
+				//countingSlaveMap = m.Get_external_list()
 				hasSentAlert = false
 			case receivedOrder := <-ExCommChans.ToMasterOrderListReceivedChan: //(type: )  FROM THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
 				allListsMatch := true
-				for key, _ := range receivedOrder.ExternalList {
-					if receivedOrder.ExternalList[key] != m.Get_external_list()[key] {
-						allListsMatch = false
+				//for key, _ := range receivedOrder.ExternalList {
+				//if receivedOrder.ExternalList[key] != m.Get_external_list()[key]
+				//{
+				allListsMatch = false
 
-					}
-				}
-				if allListsMatch {
-					delete(countingSlaveMap, receivedOrder.Ip)
-				}
-
-				if len(countingSlaveMap) == 1 && !hasSentAlert { //Only LightArray Remains
-					allSlavesAnsweredChan <- true
-					hasSentAlert = true
-				}
+				//}
 			}
-			time.Sleep(25 * time.Millisecond)
-		}
+			//if allListsMatch {
+			//delete(countingSlaveMap, receivedOrder.Ip)
+			//}
 
+			//if len(countingSlaveMap) == 1 && !hasSentAlert { //Only LightArray Remains
+			//	allSlavesAnsweredChan <- true
+			//	hasSentAlert = true
+			//}
+		}
+		time.Sleep(25 * time.Millisecond)
 	}()
 }
 func Slave_order_arrays_incoming(s Slave) {
@@ -338,8 +345,8 @@ func Slave_order_arrays_incoming(s Slave) {
 	go func() {
 		for {
 			NewExternalList := <-ExCommChans.ToSlaveOrderListChan
-			s.Overwrite_external_list(NewExternalList.ExternalList)
-			ExStateMChans.SingleExternalListChan <- *NewExternalList.ExternalList[s.Get_ip()]
+			//s.Overwrite_external_list(NewExternalList.ExternalList)
+			//ExStateMChans.SingleExternalListChan <- *NewExternalList.ExternalList[s.Get_ip()]
 			ExStateMChans.LightChan <- *NewExternalList.ExternalList[nil]
 			//Here we need to save all the information about the other slaves, and send our own to the statemachine
 			ExSlaveChans.ToCommOrderListReceivedChan <- NewExternalList
@@ -422,7 +429,7 @@ func Slave_state_updated() {
 }
 
 //checks if some of the slaves sends Im Slave signal
-func Check_slaves(ipList *[]*UDPAddr) {
+func Check_slaves(ipList []*UDPAddr) {
 	timer := make(map[*UDPAddr]time.Time)
 	for {
 		select {
