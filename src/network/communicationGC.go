@@ -51,7 +51,9 @@ func Select_send_slave() {
 		case <-ExSlaveChans.ToCommImSlaveChan:
 			Send_im_slave()
 		case state := <-ExSlaveChans.ToCommUpdatedStateChan:
+			fmt.Println("select_send_slave: state updated received")
 			Send_update_state(state)
+			//	fmt.Println("after send to network update state")
 
 		}
 	}
@@ -126,7 +128,7 @@ func Send_im_slave() {
 }
 
 //to master
-func Send_update_state(sta IpState) {
+func Send_update_state(sta State) {
 	byteIpOrder, _ := Marshal(sta)
 	prefix, _ := Marshal("ust")
 	ExNetChans.ToNetwork <- append(prefix, byteIpOrder...)
@@ -162,8 +164,9 @@ func Select_receive() {
 
 		ipByteArr := <-ExNetChans.ToComm
 		byteArr := ipByteArr.Barr
+		fmt.Println("bytearray: ", string(byteArr))
 		ip := ipByteArr.Ip
-
+		fmt.Println("ip ", ip)
 		Decrypt_message(byteArr, ip)
 	}
 }
@@ -171,6 +174,52 @@ func Select_receive() {
 func Decrypt_message(message []byte, addr *UDPAddr) {
 
 	switch {
+
+	case string(message[1:4]) == "ore":
+		noPrefix := message[5:]
+		ordList := IpOrderList{}
+		_ = Unmarshal(noPrefix, &ordList)
+		ordList.Ip = addr
+		fmt.Println("prefix = ore")
+		ExCommChans.ToMasterOrderListReceivedChan <- IpOrderList{addr, ordList.ExternalList}
+
+	case string(message[1:4]) == "oex":
+		noPrefix := message[5:]
+		ord := Order{}
+		_ = Unmarshal(noPrefix, &ord)
+		fmt.Println("prefix = oex")
+		ExCommChans.ToMasterOrderExecutedChan <- IpOrderMessage{addr, ord}
+
+	case string(message[1:4]) == "ebp":
+		noPrefix := message[5:]
+		ord := Order{}
+		_ = Unmarshal(noPrefix, &ord)
+		fmt.Println("ord= ", ord)
+		fmt.Println("prefix = ebp")
+		ExCommChans.ToMasterOrderExecutedChan <- IpOrderMessage{addr, ord}
+
+	case string(message[1:4]) == "oce":
+		noPrefix := message[5:]
+		ord := Order{}
+		_ = Unmarshal(noPrefix, &ord)
+		fmt.Println("prefix = oce")
+		ExCommChans.ToMasterOrderExecutedReConfirmedChan <- IpOrderMessage{addr, ord}
+
+	case string(message[1:4]) == "ust":
+		noPrefix := message[5:]
+		sta := State{}
+		_ = Unmarshal(noPrefix, &sta)
+		ipSta := IpState{addr, sta}
+		fmt.Println("prefix = ust")
+		ExCommChans.ToMasterUpdateState <- ipSta
+
+	case string(message[1:4]) == "ias":
+		noPrefix := message[5:]
+		ipOrd := IpOrderMessage{}
+		_ = Unmarshal(noPrefix, &ipOrd)
+		ipOrd.Ip = addr
+		fmt.Println("prefix = ias")
+		ExCommChans.ToMasterImSlaveChan <- ipOrd
 	case string(message[1:4]) == "ini":
 
 		noPrefix := message[5:]
@@ -195,52 +244,6 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		ordList.Ip = addr
 		fmt.Println("prefix = ord")
 		ExCommChans.ToSlaveOrderListChan <- ordList
-
-	case string(message[1:4]) == "ore":
-		noPrefix := message[5:]
-		ordList := IpOrderList{}
-		_ = Unmarshal(noPrefix, &ordList)
-		ordList.Ip = addr
-		fmt.Println("prefix = ore")
-		ExCommChans.ToMasterOrderListReceivedChan <- IpOrderList{addr, ordList.ExternalList}
-
-	case string(message[1:4]) == "oex":
-		noPrefix := message[5:]
-		ord := Order{}
-		_ = Unmarshal(noPrefix, &ord)
-		fmt.Println("prefix = oex")
-		ExCommChans.ToMasterOrderExecutedChan <- IpOrderMessage{addr, ord}
-
-	case string(message[1:4]) == "eco":
-		noPrefix := message[5:]
-		ord := IpOrderMessage{}
-		_ = Unmarshal(noPrefix, &ord)
-		ord.Ip = addr
-		fmt.Println("prefix = eco")
-		ExCommChans.ToSlaveOrderExecutedConfirmedChan <- IpOrderMessage{addr, ord.Ord}
-
-	case string(message[1:4]) == "ebp":
-		noPrefix := message[5:]
-		ord := Order{}
-		_ = Unmarshal(noPrefix, &ord)
-		fmt.Println("prefix = ebp")
-		ExCommChans.ToMasterExternalButtonPushedChan <- IpOrderMessage{addr, ord}
-
-	case string(message[1:4]) == "oce":
-		noPrefix := message[5:]
-		ord := Order{}
-		_ = Unmarshal(noPrefix, &ord)
-		fmt.Println("prefix = oce")
-		ExCommChans.ToMasterOrderExecutedReConfirmedChan <- IpOrderMessage{addr, ord}
-
-	case string(message[1:4]) == "ust":
-		noPrefix := message[5:]
-		ipSta := IpState{}
-		_ = Unmarshal(noPrefix, &ipSta)
-		ipSta.Ip = addr
-		fmt.Println("prefix = ust")
-		ExCommChans.ToMasterUpdateState <- ipSta
-
 	case string(message[1:4]) == "sus":
 		noPrefix := message[5:]
 		ipSta := IpState{}
@@ -255,14 +258,6 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		fmt.Println("prefix = iam")
 		ExCommChans.ToSlaveImMasterChan <- stringMessage
 
-	case string(message[1:4]) == "ias":
-		noPrefix := message[5:]
-		ipOrd := IpOrderMessage{}
-		_ = Unmarshal(noPrefix, &ipOrd)
-		ipOrd.Ip = addr
-		fmt.Println("prefix = ias")
-		ExCommChans.ToMasterImSlaveChan <- ipOrd
-
 	case string(message[1:4]) == "bpc":
 		noPrefix := message[5:]
 		ipOrd := IpOrderMessage{}
@@ -276,6 +271,13 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		_ = Unmarshal(noPrefix, &ipOrd)
 		ipOrd.Ip = addr
 		ExCommChans.ToSlaveRestartSystemTriggerChan <- ipOrd
+	case string(message[1:4]) == "eco":
+		noPrefix := message[5:]
+		ord := IpOrderMessage{}
+		_ = Unmarshal(noPrefix, &ord)
+		ord.Ip = addr
+		fmt.Println("prefix = eco")
+		ExCommChans.ToSlaveOrderExecutedConfirmedChan <- IpOrderMessage{addr, ord.Ord}
 
 	default:
 

@@ -25,6 +25,8 @@ const COMMAND = 2
 var lamp_channel_matrix [][]int
 var button_channel_matrix [][]int
 
+var last_speed float64 = 0
+
 func Elev_make_std_l_matrix() [][]int { //stupid name? we need to agree on a stanard name convention
 	std_matrix := make([][]int, 4, 8)
 	std_matrix[0] = make([]int, N_BUTTONS)

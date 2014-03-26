@@ -109,7 +109,7 @@ type ExternalSlaveChannels struct {
 	ToCommExternalButtonPushedChan     chan Order          //"ebp"
 	ToCommImSlaveChan                  chan IpOrderMessage //"ias"
 	ToCommButtonPressedConfirmedChan   chan Order          //"bpc"
-	ToCommUpdatedStateChan             chan IpState        //"ust"
+	ToCommUpdatedStateChan             chan State          //"ust"
 	ToCommRestartSystemChan            chan IpOrderList
 }
 type ExternalMasterChannels struct {
@@ -121,7 +121,7 @@ type ExternalMasterChannels struct {
 type ExternalStateMachineChannels struct {
 	ButtonPressedChan      chan Order
 	OrderServedChan        chan Order
-	CurrentStateChan       chan IpState
+	CurrentStateChan       chan State
 	GetSlaveStructChan     chan bool
 	ReturnSlaveStructChan  chan Slave
 	DirectionUpdateChan    chan int
@@ -171,7 +171,7 @@ func Slave_external_chans_init() {
 	ExSlaveChans.ToCommOrderExecutedReConfirmedChan = make(chan Order) //"oce"
 	ExSlaveChans.ToCommExternalButtonPushedChan = make(chan Order)     //"ebp"
 	ExSlaveChans.ToCommImSlaveChan = make(chan IpOrderMessage)
-	ExSlaveChans.ToCommUpdatedStateChan = make(chan IpState)
+	ExSlaveChans.ToCommUpdatedStateChan = make(chan State)
 	ExSlaveChans.ToCommNetworkInitRespChan = make(chan IpOrderList)
 	ExSlaveChans.ToCommNetworkInitChan = make(chan IpOrderList)
 	ExSlaveChans.ToCommRestartSystemChan = make(chan IpOrderList) //"ree"
@@ -186,7 +186,7 @@ func Master_external_chans_init() {
 func External_state_machine_channels_init() {
 	ExStateMChans.ButtonPressedChan = make(chan Order)
 	ExStateMChans.OrderServedChan = make(chan Order)
-	ExStateMChans.CurrentStateChan = make(chan IpState)
+	ExStateMChans.CurrentStateChan = make(chan State)
 	ExStateMChans.GetSlaveStructChan = make(chan bool)
 	ExStateMChans.ReturnSlaveStructChan = make(chan Slave)
 	ExStateMChans.DirectionUpdateChan = make(chan int)

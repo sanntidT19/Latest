@@ -9,7 +9,7 @@ import (
 	. "net"
 	"os"
 	"os/exec"
-	//. "statemachine"
+	. "statemachine"
 	"sync"
 	"time"
 )
@@ -35,6 +35,7 @@ func internal_logic_channels_init() {
 }
 
 func Activate_slave() {
+	internal_logic_channels_init()
 	fmt.Println("start slave")
 	var localAddr *UDPAddr
 
@@ -52,43 +53,37 @@ func Activate_slave() {
 	var ipOrd IpOrderList
 	tick := time.After(500 * time.Millisecond)
 	check := true
+
+	ipAddressiter := 0
 	for check {
 
-		fmt.Println("forloop")
-
+		//fmt.Println("forloop")
 		select {
 		case ipOrd = <-ExCommChans.ToSlaveNetworkInitRespChan:
-
-			fmt.Println("case 2")
-
+			//fmt.Println("case 2")
 			isInList := false
 			for i := 0; i < N_ELEV; i++ {
-
-				fmt.Println("test1")
-
 				if ipVarList[i] == ipOrd.Ip {
 					isInList = true
 				}
-
-				fmt.Println("test1")
-
-				if isInList {
-					ipVarList[i] = ipOrd.Ip
-				}
-
+				//	fmt.Println("test1")
+			}
+			if !isInList {
+				ipVarList[ipAddressiter] = ipOrd.Ip
+				ipAddressiter++
 			}
 
 		case <-tick:
 
-			fmt.Println("case 3")
+			//fmt.Println("case 3")
 			check = false
 			break
 		}
-		fmt.Println("ipOrderList", ipOrd)
+		//fmt.Println("ipOrderList", ipOrd)
 
 	}
 	//VELGER MASTER
-	fmt.Println("ipVarList", ipVarList)
+	//fmt.Println("ipVarList", ipVarList)
 	tempBestMaster := ipVarList[0]
 	for i := 1; i < len(ipVarList); i++ {
 		if IpSum(tempBestMaster) > IpSum(ipVarList[i]) {
@@ -96,16 +91,17 @@ func Activate_slave() {
 		}
 	}
 
-	fmt.Println("localAddr", localAddr)
+	//fmt.Println("localAddr", localAddr)
 
-	fmt.Println("tempBestMaster", tempBestMaster)
+	//fmt.Println("tempBestMaster", tempBestMaster)
 
 	if localAddr == tempBestMaster {
 		m := Master{}
 		m.SlaveIp = ipVarList
-		fmt.Println("this is master")
-		go Activate_master(m)
-		go Check_slaves(m.SlaveIp)
+		//fmt.Println("this is master")
+		go Activate_master(&m)
+		fmt.Println("master= ", m)
+		go Check_slaves(&m.SlaveIp)
 
 	}
 	//no else becauce the master is also a "slave"
@@ -117,11 +113,11 @@ func Activate_slave() {
 	go Slave_order_arrays_incoming(s)
 	go Slave_state_updated()
 
-	fmt.Println("this is slave")
+	//fmt.Println("this is slave")
 
-	//go Elevator_manager()
+	go Elevator_manager()
 
-	fmt.Println("end of activeslave")
+	//fmt.Println("end of activeslave")
 
 	blockingChan := make(chan bool)
 	<-blockingChan
@@ -129,16 +125,16 @@ func Activate_slave() {
 	fmt.Println("end of activeslave, after block")
 }
 
-func Activate_master(m Master) {
+func Activate_master(m *Master) {
 	fmt.Println("Starting Master")
 	//address, _ := ResolveUDPAddr("udp", "129.241.187.255"+PORT)
 	//conn, _ := DialUDP("udp", nil, address)
 
 	go Write_to_network()
 	go Select_receive()
-	go Master_top_logic(m)
+	go Master_top_logic(*m)
 	go Master_updated_state_incoming()
-	go Master_updated_externalList_outgoing(m)
+	go Master_updated_externalList_outgoing(*m)
 	go Master_incoming_order_executed()
 }
 
@@ -154,7 +150,40 @@ func Master_updated_state_incoming() {
 	for {
 		updatedState := <-InLogicChans.ToMasterUpdateStateChan
 		InLogicChans.ToStateUpdater <- updatedState
-		ExSlaveChans.ToCommUpdatedStateChan <- updatedState
+
+		ExSlaveChans.ToCommUpdatedStateChan <- updatedState.Sta
+	}
+}
+
+func Master_top_logic(m Master) {
+	for {
+		select {
+		case ipOrder := <-InLogicChans.ToTopLogicOrderChan:
+			fmt.Println("we have received from secure sending grid")
+			fmt.Println(ipOrder)
+
+			if !ipOrder.Ord.TurnOn { // If order executed, just update the internal arrays and the updater will notify when updated. It will use IP smartly
+				m.Set_external_list_order(ipOrder.Ip, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
+				m.Set_external_list_order(nil, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
+				//m.ExternalList[nil][ipOrder.Order.Floor][ipOrder.Order.ButtonType] = ipOrder.Order.TurnOn
+
+				InLogicChans.ExternalListIsUpdated <- true //THIS IS THE MAP WE MUST CHANGE. WE SHOULD DO THIS TOGETHER SINCE A LOT OF FUNCTIONALITY USES IT
+
+				//ToStateMachineArrayChan <- LocalMaster.AllArrays[LocalMaster.myIP]	WE NEED TO LOOK AT THIS FFS!!!!!!
+
+			} else { //else its a button pressed and we need the optimization module decide who gets it
+				fmt.Println("               This is else in toplogic")
+				ExOptimalChans.OptimizationTriggerChan <- ipOrder
+
+			}
+		case ipState := <-InLogicChans.ToStateUpdater:
+			m.Statelist[ipState.Ip] = ipState
+		case ipOrder := <-ExOptimalChans.OptimizationReturnChan:
+			m.Set_external_list_order(ipOrder.Ip, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
+			m.Set_external_list_order(nil, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
+			InLogicChans.ExternalListIsUpdated <- true //We now have two channels writing to one channel, but the goroutine should empty the buffer quite nicely
+
+		}
 	}
 }
 
@@ -162,29 +191,31 @@ func Master_updated_state_incoming() {
 func Master_incoming_order_executed() { //RENAME THIS MOTHERFUCKER TO TAKE CARE OF ALL THE SHITS//Generalize this for all orders, either ordered or executed.
 	countdownChan := make(chan IpOrderMessage)
 	timerMap := make(map[IpOrderMessage]time.Time)
-	var SyncOrderMap struct {
+	var SyncOrderMap = struct {
 		sync.RWMutex
 		m map[Order]*UDPAddr
-	}
+	}{m: make(map[Order]*UDPAddr)}
 
 	go func() {
 		for {
 			//Updates the queue, if the same kind of messages are sent simultaneously
 			orderExe := <-ExCommChans.ToMasterOrderExecutedChan //This is on IP-message-form
-
+			fmt.Println("received from masterORderExecuteChan")
 			InLogicChans.ToTopLogicOrderChan <- orderExe /*The code that receives isnt made yet. Should handle optimization module there.*/
+			fmt.Println("Sent to toplogicOrderchan")
 
 			SyncOrderMap.RLock()
 			inQueue := SyncOrderMap.m[orderExe.Ord] //It will be nil if its not in the map
 			SyncOrderMap.RUnlock()
 			if inQueue == nil { //If its not in queue we should
-				InLogicChans.ToTopLogicOrderChan <- orderExe
+				//InLogicChans.ToTopLogicOrderChan <- orderExe
 				SyncOrderMap.Lock()
 				SyncOrderMap.m[orderExe.Ord] = orderExe.Ip
 				SyncOrderMap.Unlock()
 			}
 			countdownChan <- orderExe
 			ExMasterChans.ToCommOrderExecutedConfirmedChan <- orderExe
+			fmt.Println("Sent to ")
 		}
 	}()
 	//Timer function, that concurrently deletes orders/renews the timer.
@@ -234,34 +265,6 @@ func Slave_top_Logic() {
 	}
 
 }*/
-func Master_top_logic(m Master) {
-	for {
-		select {
-		case ipOrder := <-InLogicChans.ToTopLogicOrderChan:
-			//HANDLE INTERNAL BUTTONS -> BUTTON TYPE
-			if ipOrder.Ord.TurnOn { // If order executed, just update the internal arrays and the updater will notify when updated. It will use IP smartly
-				m.Set_external_list_order(ipOrder.Ip, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
-				m.Set_external_list_order(nil, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
-				//m.ExternalList[nil][ipOrder.Order.Floor][ipOrder.Order.ButtonType] = ipOrder.Order.TurnOn
-
-				InLogicChans.ExternalListIsUpdated <- true //THIS IS THE MAP WE MUST CHANGE. WE SHOULD DO THIS TOGETHER SINCE A LOT OF FUNCTIONALITY USES IT
-
-				//ToStateMachineArrayChan <- LocalMaster.AllArrays[LocalMaster.myIP]	WE NEED TO LOOK AT THIS FFS!!!!!!
-
-			} else { //else its a button pressed and we need the optimization module decide who gets it
-				ExOptimalChans.OptimizationTriggerChan <- ipOrder
-
-			}
-		case ipState := <-InLogicChans.ToStateUpdater:
-			m.Statelist[ipState.Ip] = ipState
-		case ipOrder := <-ExOptimalChans.OptimizationReturnChan:
-			m.Set_external_list_order(ipOrder.Ip, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
-			m.Set_external_list_order(nil, ipOrder.Ord.Floor, ipOrder.Ord.ButtonType, ipOrder)
-			InLogicChans.ExternalListIsUpdated <- true //We now have two channels writing to one channel, but the goroutine should empty the buffer quite nicely
-
-		}
-	}
-}
 func Master_updated_externalList_outgoing(m Master) {
 	localSlaveMap := IpOrderList{}
 	//timerMap := make(map[*UDPAddr]time.Time)               //timers for each IP
@@ -344,20 +347,23 @@ func Slave_order_arrays_incoming(s Slave) {
 	}()
 }
 func Slave_Order_Outgoing() {
+	//fmt.Println("Slave_Order_Outgoing")
 	//	countdownChan := make(chan IpOrderMessage)
-	var SyncOrderMap struct {
+	var SyncOrderMap = struct {
 		sync.RWMutex
 		m map[IpOrderMessage]time.Time
-	}
-
+	}{m: make(map[IpOrderMessage]time.Time)}
 	go func() {
 		for {
 			//Updates the queue, if the same kind of messages are sent simultaneously
 			orderOut := <-ExStateMChans.ButtonPressedChan
+
 			IpOrderOut := IpOrderMessage{nil, orderOut}
+
 			SyncOrderMap.Lock()
 			SyncOrderMap.m[IpOrderOut] = time.Now()
 			SyncOrderMap.Unlock()
+
 			ExSlaveChans.ToCommExternalButtonPushedChan <- orderOut
 		}
 	}()
@@ -390,33 +396,40 @@ func Slave_Order_Outgoing() {
 
 //Sends state if timer expires or state changes.
 func Slave_state_updated() {
-	sendAgainTimer := make(<-chan time.Time)
-	var localCurrentState IpState
+	//sendAgainTimer := make(<-chan time.Time)
+	var localCurrentState State
 	for {
 		select {
 		case localCurrentState = <-ExStateMChans.CurrentStateChan:
+			fmt.Println("slave state updated inside case!!!!")
 			ExSlaveChans.ToCommUpdatedStateChan <- localCurrentState
-			sendAgainTimer = time.After(50 * time.Millisecond)
+			fmt.Println("after tocommupdatedstatechan")
+			//sendAgainTimer = time.After(50 * time.Millisecond)
 		case currentStateReceived := <-ExCommChans.ToSlaveUpdateStateReceivedChan:
-			if currentStateReceived == localCurrentState {
-				sendAgainTimer = nil //Not sure if this is legal, will this send to channel if its set to nil??
+			if currentStateReceived.Sta == localCurrentState {
+				//sendAgainTimer = nil //Not sure if this is legal, will this send to channel if its set to nil??
+				fmt.Println("slave state updated")
 			}
-		case <-sendAgainTimer: //This will be sent when time runs out, I think.
+			/*case <-sendAgainTimer: //This will be sent when time runs out, I think.
+			fmt.Println("send again timer")
+
 			ExSlaveChans.ToCommUpdatedStateChan <- localCurrentState
-			sendAgainTimer = time.After(50 * time.Millisecond)
+			//	fmt.Println("after send again timer")
+			sendAgainTimer = time.After(500 * time.Millisecond)
+			*/
 		}
 	}
 }
 
 //checks if some of the slaves sends Im Slave signal
-func Check_slaves(ipList []*UDPAddr) {
+func Check_slaves(ipList *[]*UDPAddr) {
 	timer := make(map[*UDPAddr]time.Time)
 	for {
 		select {
 		case slaveIpOrder := <-ExCommChans.ToMasterImSlaveChan:
 			timer[slaveIpOrder.Ip] = time.Now()
 		case <-ExCommChans.ToSlaveNetworkInitChan:
-			fmt.Println("new slave on network - reset")
+			//fmt.Println("new slave on network - reset")
 			Restart_system()
 
 		}
