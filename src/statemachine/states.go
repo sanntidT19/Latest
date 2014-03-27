@@ -184,7 +184,7 @@ func Send_orders_to_worker(internalList *[N_FLOORS]bool) {
 		case <-InStateMChans.orderServedChan:
 			orderServed := currentOrderList[currentOrderIter]
 			if orderServed.ButtonType != driver.COMMAND {
-				ExStateMChans.OrderServedChan <- orderServed
+				ExStateMChans.ButtonPressedChan <- Order{orderServed.Floor, orderServed.ButtonType, false}
 			}
 			if orderServed.ButtonType == driver.COMMAND {
 				internalList[orderServed.Floor] = false

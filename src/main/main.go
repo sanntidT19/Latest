@@ -3,14 +3,13 @@ package main
 import (
 	. "chansnstructs"
 	"fmt"
-	//"net"
+
 	. "toplayer"
 )
 
 func main() {
 
-	//	var externalList map[*net.UDPAddr]*[N_FLOORS][2]bool
-
+	fmt.Println(GetMyIP())
 	Init_elevator(true)
 	blockingChan := make(chan bool)
 	<-blockingChan

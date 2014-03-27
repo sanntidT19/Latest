@@ -1,83 +1,87 @@
-package optimalization
+package optimal
 
 import (
+	. "chansnstructs"
 	"fmt"
 )
-const (
 
-)
+//Return IPOrd
 
-//Return IPorder
-
-func Optimalization_init(m Master) {
+func Optimalization_init(m *Master) {
 	for {
-		ord := <-ExOptimalChans.OptimizationTriggerChan
-		
-		slaveIPs := m.SLaveIp
+		optOrd := <-ExOptimalChans.OptimizationTriggerChan
+		slaveIps := m.SlaveIp
 		workloadVector := make([]int, N_ELEV)
 		var distance int
 
-		for i:=0; i < len(SlaveIp); i++ {
-			if distance = ord.Order.Floor - m.Statelist[slaveIPs[i]]; distance > 0{
-				workloadVector[i] += distance
-				for j := 0; j < N_FLOORS; j++{
-					for k := 0; k < 2; k++{
-						if m.ExternalList[slaveIPs[i]][j][k]{ //Order in floor
-							if k != ord.Direction{
-								if j < ord.Order.Floor{
-									workloadVector[i] += 2*(ord.Order.Floor - j)
-								}else{
-									workloadVector[i] += ord.Order.Floor - j
+		for i := 0; i < len(slaveIps); i++ {
+			if slaveIps[i] == nil {
+				workloadVector[i] = 9999
+			}
+			if slaveIps[i] != nil {
+				if distance = optOrd.Ord.Floor - m.Statelist[i].Sta.CurrentFloor; distance > 0 {
+					workloadVector[i] += distance
+					for j := 0; j < N_FLOORS; j++ {
+						for k := 0; k < 2; k++ {
+							if m.ExternalList[i][j][k] { //Ord in floor
+								if k != optOrd.Ord.ButtonType {
+									if j < optOrd.Ord.Floor {
+										workloadVector[i] += 2 * (optOrd.Ord.Floor - j)
+									} else {
+										workloadVector[i] += optOrd.Ord.Floor - j
+									}
 								}
-							}
-							if k == ord.Direction{
-								if j < ord.Order.Floor{
-									workloadVector[i] += ord.Order.Floor - j
-								}else{
-									workloadVector[i] += 2*(j - ord.Order.Floor)
+								if k == optOrd.Ord.ButtonType {
+									if j < optOrd.Ord.Floor {
+										workloadVector[i] += optOrd.Ord.Floor - j
+									} else {
+										workloadVector[i] += 2 * (j - optOrd.Ord.Floor)
+									}
 								}
 							}
 						}
+
 					}
-
-				}
-			}else{
-				workloadVector[i] -= distance
-				for j := 0; j < N_FLOORS; j++{
-					for k := 0; k < 2; k++{
-						if m.ExternalList[slaveIPs[i]][j][k]{ //Order in floor
-							if k != ord.Direction{
-								if j > ord.Order.Floor{
-									workloadVector[i] += 2*(j -ord.Order.Floor)
-								}else{
-									workloadVector[i] += ord.Order.Floor - j
+				} else {
+					workloadVector[i] -= distance
+					for j := 0; j < N_FLOORS; j++ {
+						for k := 0; k < 2; k++ {
+							if m.ExternalList[i][j][k] { //Ord in floor
+								if k != optOrd.Ord.ButtonType {
+									if j > optOrd.Ord.Floor {
+										workloadVector[i] += 2 * (j - optOrd.Ord.Floor)
+									} else {
+										workloadVector[i] += optOrd.Ord.Floor - j
+									}
 								}
-							}
-							if k == ord.Direction{
-								if j > ord.Order.Floor{
-									workloadVector[i] += j - ord.Order.Floor 
-								}else{
-									workloadVector[i] += 2*(ord.Order.Floor - j)
-								}
+								if k == optOrd.Ord.ButtonType {
+									if j > optOrd.Ord.Floor {
+										workloadVector[i] += j - optOrd.Ord.Floor
+									} else {
+										workloadVector[i] += 2 * (optOrd.Ord.Floor - j)
+									}
 
+								}
 							}
 						}
-					}
 
+					}
 				}
 			}
 
 		}
 		//Chooses elevator with lead workload
 		NrMinWorkloadElevator := 0
-		tempLoad :=	9999
-		for i:=0; i<len(slaveIPs); i++ {
-			if tempLoad >= workLoadVector[i]{
+		tempLoad := 9999
+		for i := 0; i < len(slaveIps); i++ {
+			if tempLoad >= workloadVector[i] {
 				NrMinWorkloadElevator = i
-				tempLoad = workLoadVector[i]
+				tempLoad = workloadVector[i]
 			}
 		}
-		ord.Ip = slaveIPs[NrMinWorkloadElevator]
-		ExOptimalChans.OptimizationReturnChan <- ord
+		fmt.Println(workloadVector)
+		optOrd.Ip = slaveIps[NrMinWorkloadElevator]
+		fmt.Println("optimalization finished with this one:   ", optOrd)
+		ExOptimalChans.OptimizationReturnChan <- optOrd
 	}
 }
