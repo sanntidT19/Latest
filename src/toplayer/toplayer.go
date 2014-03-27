@@ -42,8 +42,9 @@ func Activate_slave() {
 	//externalListRFF := Read_from_file()
 	internal_logic_channels_init()
 	//fmt.Println("start slave")
-	var localAddr *UDPAddr
 
+	templocalAddr := Get_my_ip()
+	localAddr, _ := ResolveUDPAddr("udp", templocalAddr)
 	fmt.Println(localAddr)
 	fmt.Println("&standardarray", standardArray)
 	//standardArray = {{false, false}, {false ,false } ,{false ,false }, {false ,false }}
@@ -99,6 +100,7 @@ func Activate_slave() {
 			tempBestMaster = ipVarList[i]
 		}
 	}
+
 	fmt.Println("tempbestmaster: ", tempBestMaster)
 	fmt.Println("localaddr : ", localAddr)
 	localAddr = tempBestMaster // WE NEED TO FIND THE LOCAL IP SOMEHOW
@@ -109,6 +111,8 @@ func Activate_slave() {
 		m := Master{}
 
 		//m.ExternalList = externalListRFF
+
+		ExMasterChans.ToCommSendIpListChan <- ipVarList
 
 		m.SlaveIp = ipVarList
 		m.ExternalList = make([][N_FLOORS][2]bool, N_ELEV+1)
@@ -123,7 +127,14 @@ func Activate_slave() {
 	}
 	//no else becauce the master is also a "slave"
 	s := Slave{}
-
+	ipList := <-ExCommChans.ToSlaveReceiveIpListChan
+	for i := 0; i < len(ipList); i++ {
+		if ipList[i] == localAddr {
+			fmt.Println("	i am slave nr: ", i)
+			s.Nr = i
+			break
+		}
+	}
 	go Check_master(&s)
 	//go Slave_top_Logic(s)
 	go Slave_Order_Outgoing()
@@ -166,7 +177,7 @@ func IpSum(addr *UDPAddr) (sum byte) {
 func Master_updated_state_incoming() {
 	for {
 		updatedState := <-ExCommChans.ToMasterUpdateStateChan
-		fmt.Println("			State update received:  			", updatedState)
+		fmt.Println("State update received  YOLOMAX: ", updatedState)
 
 		InLogicChans.ToStateUpdater <- updatedState
 
@@ -220,9 +231,9 @@ func Master_top_logic(m *Master) {
 				}
 
 			}
-			fmt.Println("ex list updated")
+			fmt.Println("											ex list updated")
 			InLogicChans.ExternalListIsUpdated <- true
-			fmt.Println("ex list updated end")
+			fmt.Println("										ex list updated end")
 			//sets order
 
 			//sets lights
@@ -321,7 +332,7 @@ func Slave_top_Logic() {
 
 }*/
 func Master_updated_externalList_outgoing(m *Master) {
-	localSlaveSlice := IpOrderList{}
+	//localSlaveSlice := m.SlaveIp
 	//timerMap := make(map[*UDPAddr]time.Time)               //timers for each IP
 	startCountdownChan := make(chan bool)
 	countdownFinishedChan := make(chan bool)
@@ -336,87 +347,83 @@ func Master_updated_externalList_outgoing(m *Master) {
 		for {
 			select {
 			case <-InLogicChans.ExternalListIsUpdated: //COMING FROM LOCAL STATEMACHINE -  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
+				fmt.Println("I 			GET 			MADDAFAKKINGS 			HERE")
+
 				//localSlaveMap.ExternalList = m.Get_external_list()
-				ExMasterChans.ToCommOrderListChan <- localSlaveSlice //TO THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
-				startReceivingChan <- localSlaveSlice.ExternalList
-				startCountdownChan <- true
-			case <-countdownFinishedChan:
-				ExMasterChans.ToCommOrderListChan <- localSlaveSlice //TO THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
+				ExMasterChans.ToCommOrderListChan <- IpOrderList{nil, m.ExternalList} //TO THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
+				//startReceivingChan <- localSlaveSlice.ExternalList
+				//startCountdownChan <- true
+				//case <-countdownFinishedChan:
+				//ExMasterChans.ToCommOrderListChan <- localSlaveSlice //TO THE COMMUNICATION MODULE --  THIS NEEDS TO BE MADE - FEEL FREE TO CHANGE NAME
 			}
 
 		}
 	}()
-	//Timer goroutine, receives answer and removes from
-	//Also sends again if no answer
-	go func() {
-		for {
-			select {
-			case <-startCountdownChan:
-				timer = time.After(500 * time.Millisecond) // If all answers, find a way to stop timer
-			case <-timer:
-				countdownFinishedChan <- true
-			case <-allSlavesAnsweredChan:
-				timer = nil
+	/*
+		//Timer goroutine, receives answer and removes from
+		//Also sends again if no answer
+		go func() {
+			for {
+				select {
+				case <-startCountdownChan:
+					timer = time.After(500 * time.Millisecond) // If all answers, find a way to stop timer
+				case <-timer:
+					countdownFinishedChan <- true
+				case <-allSlavesAnsweredChan:
+					timer = nil
+				}
 			}
-		}
-	}()
-	var allListsMatch bool
-	go func() {
-		for {
-			select {
-			case <-startReceivingChan:
-				hasSentAlert = false
-			case ipOrdList := <-ExCommChans.ToMasterOrderListReceivedChan:
-				localSlaveSlice := m.Get_external_list()
-				receivedOrder := ipOrdList.ExternalList
-				allListsMatch = true
-				for i := 0; i < N_ELEV; i++ {
-					for j := 0; i < N_FLOORS; j++ {
-						for k := 0; k < 2; k++ {
-							if localSlaveSlice[i][j][k] && receivedOrder[i][j][k] {
-								localSlaveSlice[i][j][k] = false
-								hasSentAlert = true ////??????????+
-							} else {
-								allListsMatch = false
-							}
+		}()
+		var allListsMatch bool
+		go func() {
+			for {
+				select {
+				case <-startReceivingChan:
+					hasSentAlert = false
+				case ipOrdList := <-ExCommChans.ToMasterOrderListReceivedChan:
+					checkingSlaveIps =  [N_ELEV] bool
+					receivedOrder := ipOrdList.ExternalList
+					allListsMatch = true
+
+
+					/*****
+					for key, _ := range receivedOrder.ExternalList {
+						if receivedOrder.ExternalList[key] != m.Get_external_list()[key] {
+							allListsMatch = false
+
 						}
 					}
-				}
-				/*****
-				for key, _ := range receivedOrder.ExternalList {
-					if receivedOrder.ExternalList[key] != m.Get_external_list()[key] {
-						allListsMatch = false
+					if allListsMatch {
+						countingSlaveSlice[][][]
+						delete(countingSlaveSlice, receivedOrder.Ip)
+					}
 
+
+					if len(countingSlaveSlice) == 1 && !hasSentAlert { //Only LightArray Remains
+						allSlavesAnsweredChan <- true
+						hasSentAlert = true
 					}
 				}
-				if allListsMatch {
-					countingSlaveSlice[][][]
-					delete(countingSlaveSlice, receivedOrder.Ip)
-				}
-				*/
-
-				if len(countingSlaveSlice) == 1 && !hasSentAlert { //Only LightArray Remains
-					allSlavesAnsweredChan <- true
-					hasSentAlert = true
-				}
+				time.Sleep(25 * time.Millisecond)
 			}
-			time.Sleep(25 * time.Millisecond)
-		}
-	}()
+		}()*/
 }
 
 func Slave_order_arrays_incoming(s *Slave) {
 	//var NewExternalList map[*UDPAddr]*[N_FLOORS][2]bool //Think sending the master could be good, but master isnt a good name
 	go func() {
 		for {
+
 			NewExternalList := <-ExCommChans.ToSlaveOrderListChan
-			//s.Overwrite_external_list(NewExternalList.ExternalList)
+			s.ExternalList = NewExternalList.ExternalList
 			//ExStateMChans.SingleExternalListChan <- *NewExternalList.ExternalList[s.Get_ip()]
 
 			//This access the last array containing ligths
 			ExStateMChans.LightChan <- NewExternalList.ExternalList[N_FLOORS]
 			//Here we need to save all the information about the other slaves, and send our own to the statemachine
-			ExSlaveChans.ToCommOrderListReceivedChan <- NewExternalList
+
+			//We dont want to confirm this
+			//ExSlaveChans.ToCommOrderListReceivedChan <- NewExternalList
 		}
 	}()
 }
@@ -473,7 +480,7 @@ func Slave_Order_Outgoing() {
 
 //Sends state if timer expires or state changes.
 func Slave_state_updated() {
-	//sendAgainTimer := make(<-chan time.Time)
+	sendAgainTimer := make(<-chan time.Time)
 	var localCurrentState State
 	for {
 		select {
@@ -481,19 +488,19 @@ func Slave_state_updated() {
 			fmt.Println("slave state updated inside case!!!!")
 			ExSlaveChans.ToCommUpdatedStateChan <- localCurrentState
 			fmt.Println("after tocommupdatedstatechan")
-			//sendAgainTimer = time.After(50 * time.Millisecond)
+			sendAgainTimer = time.After(50 * time.Millisecond)
 		case currentStateReceived := <-ExCommChans.ToSlaveUpdateStateReceivedChan:
 			if currentStateReceived.Sta == localCurrentState {
-				//sendAgainTimer = nil //Not sure if this is legal, will this send to channel if its set to nil??
+				sendAgainTimer = nil //Not sure if this is legal, will this send to channel if its set to nil??
 				fmt.Println("slave state updated")
 			}
-			/*case <-sendAgainTimer: //This will be sent when time runs out, I think.
+		case <-sendAgainTimer: //This will be sent when time runs out, I think.
 			fmt.Println("send again timer")
 
 			ExSlaveChans.ToCommUpdatedStateChan <- localCurrentState
 			//	fmt.Println("after send again timer")
 			sendAgainTimer = time.After(500 * time.Millisecond)
-			*/
+
 		}
 	}
 }
@@ -585,7 +592,7 @@ func Read_from_file() [][N_FLOORS][2]bool {
 	return externalList
 }
 
-func GetMyIP() string {
+func Get_my_ip() string {
 	con1, _ := Dial("udp", "google.com:http")
 	myIP := con1.LocalAddr().String()
 	str := strings.Split(myIP, ":")

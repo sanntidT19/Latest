@@ -19,6 +19,7 @@ func Write_to_network() {
 
 	addr, err := ResolveUDPAddr("udp", localIp)
 	c, err := DialUDP("udp", nil, addr)
+	defer c.Close()
 	if err != nil {
 		//fmt.Println("Error in write to network: ", err.Error())
 	}
@@ -31,7 +32,7 @@ func Write_to_network() {
 
 		err = c.SetWriteDeadline(time.Now().Add(20 * time.Millisecond))
 		_, err = c.Write(to_writing)
-		fmt.Println("after write", string(to_writing))
+		//fmt.Println("after write", string(to_writing))
 		if err != nil {
 			//fmt.Println("gogo write with error")
 			fmt.Println(err.Error())
@@ -64,7 +65,7 @@ func Receive() { //will error trigger if just read fails? or will it only go on 
 			ipByte := IpByteArr{sendersAddr, buf[:n]}
 
 			ExNetChans.ToComm <- ipByte
-			fmt.Println("network Sends to Communication")
+			//fmt.Println("network Sends to Communication")
 
 		} else {
 			fmt.Println("receive666")

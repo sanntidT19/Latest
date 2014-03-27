@@ -88,6 +88,7 @@ type ExternalCommunicationChannels struct {
 	ToSlaveUpdateStateReceivedChan    chan IpState        //"sus"-
 	ToSlaveImMasterChan               chan string         //"iam"-
 	ToSlaveRestartSystemTriggerChan   chan bool           //"ree"
+	ToSlaveReceiveIpListChan          chan []*UDPAddr     //"sil"
 }
 
 type ExternalSlaveChannels struct {
@@ -107,6 +108,7 @@ type ExternalMasterChannels struct {
 	ToCommOrderExecutedConfirmedChan chan IpOrderMessage //"eco"
 	ToCommImMasterChan               chan string         //"iam"
 	ToCommUpdateStateReceivedChan    chan IpState        //"sus"
+	ToCommSendIpListChan             chan []*UDPAddr     //"sil"
 }
 type ExternalStateMachineChannels struct {
 	ButtonPressedChan      chan Order
@@ -153,6 +155,7 @@ func Communication_external_channels_init() {
 	ExCommChans.ToSlaveNetworkInitChan = make(chan IpOrderList)               //"ini"
 	ExCommChans.ToSlaveUpdateStateReceivedChan = make(chan IpState)           //"sus"
 	ExCommChans.ToSlaveRestartSystemTriggerChan = make(chan bool)             //"ree"
+	ExCommChans.ToSlaveReceiveIpListChan = make(chan []*UDPAddr)              //"sil"
 
 }
 
@@ -172,6 +175,8 @@ func Master_external_chans_init() {
 	ExMasterChans.ToCommOrderListChan = make(chan IpOrderList)                 //"ord"
 	ExMasterChans.ToCommOrderExecutedConfirmedChan = make(chan IpOrderMessage) //"eco"
 	ExMasterChans.ToCommImMasterChan = make(chan string)                       //"iam"
+	ExMasterChans.ToCommUpdateStateReceivedChan = make(chan IpState)
+	ExMasterChans.ToCommSendIpListChan = make(chan []*UDPAddr) //"sil"
 }
 
 func External_state_machine_channels_init() {
@@ -196,7 +201,7 @@ type Master struct {
 }
 
 type Slave struct {
-	nr           int
+	Nr           int
 	ExternalList [][N_FLOORS][2]bool
 	InternalList []bool
 	CurrentFloor int
