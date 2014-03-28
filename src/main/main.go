@@ -23,10 +23,7 @@ func checkError(e error) {
 }
 
 func Init_elevator(firstRun bool) {
-	fmt.Println("start init elev")
 	Channels_init()
 
 	Activate_slave()
-	fmt.Println("running")
-	fmt.Println("finish init elev")
 }
