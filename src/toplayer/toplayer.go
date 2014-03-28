@@ -3,7 +3,6 @@ package toplayer
 import (
 	. "chansnstructs"
 	. "network"
-	//. "sync"
 	. "encoding/json"
 	"fmt"
 	. "net"
@@ -52,9 +51,7 @@ func Activate_slave() {
 	templocalAddr := Get_my_ip()
 	localAddr, _ := ResolveUDPAddr("udp", templocalAddr)
 	fmt.Println("local address ",localAddr)
-	//fmt.Println("&standardarray", standardArray)
-	//standardArray = {{false, false}, {false ,false } ,{false ,false }, {false ,false }}
-	//fmt.Println("connection init")
+	
 	go Receive()
 	go Select_receive()
 	go Select_send_slave()
@@ -62,7 +59,6 @@ func Activate_slave() {
 	go Select_send_master()
 	Interuption_killer(externalList)
 
-	// This will not be blocking becauce of Select_send will take it
 	netInitTrigger := IpOrderList{}
 	ExSlaveChans.ToCommNetworkInitChan <- netInitTrigger
 	ipVarList := make([]*UDPAddr, N_ELEV)
@@ -80,91 +76,50 @@ func Activate_slave() {
 			default:
 				ExSlaveChans.ToCommNetworkInitChan <- netInitTrigger
 				time.Sleep(time.Millisecond*25)
-
 			}
-
 		}
-
 	}()
-
 
 	ipAddressiter := 0
 	for check1 {
-		//fmt.Println("forloop")
+	
 		select {
 		case ipOrd = <-ExCommChans.ToSlaveNetworkInitRespChan:
-	//fmt.Println("Denne nåes")
-			//fmt.Println("case 2")
 			isInList := false
 			for i := 0; i < N_ELEV; i++ {
 				if ipVarList[i] != nil {
 					if ipVarList[i].String()[:15] == ipOrd.Ip.String()[:15] {
 						isInList = true
 					}
-					//	fmt.Println("test1")
 				}
 			}
 			if !isInList {
 						ipVarList[ipAddressiter] = ipOrd.Ip
 						ipAddressiter++
-				//	fmt.Println("ipadressiter: ",ipAddressiter)
 					}
 
 		case <-tick1:
-
-			//fmt.Println("case 3")
 			check1 = false
 			break
 		}
-		//fmt.Println("ipOrderList", ipOrd)
-
 	}
-	//notFinished = true
-	/*
-		if ipVarList[i] != nil && ipVarList != nil {
-			if ipVarList[0].String()[:15] < ipVarList[1].String()[:15]
-				tempItem := ipVarList[0]
-				ipVarList[0] = ipVarList[1]
-				ipVarList[1] = tempItem
-			}
 
-			if ipVarList[0].String()[:15] < ipVarList[2].String()[:15]
-				tempItem := ipVarList[0]
-				ipVarList[0] = ipVarList[2]
-				ipVarList[2] = tempItem
-			}
-			if ipVarList[1].String()[:15] < ipVarList[2].String()[:15]
-				tempItem := ipVarList[1]
-				ipVarList[1] = ipVarList[2]
-				ipVarList[2] = tempItem
-			}
-		}
-	}
-	*/
 	nilCounter := 0
 	var mongofaen[N_ELEV] int
 	tempBestMaster := ipVarList[0]
-//	fmt.Println("ipVarList= ", ipVarList)		
 	for i := 0; i < len(ipVarList); i++ {
-	//	fmt.Println("i = ",i)
 		if ipVarList[i] == nil{
 			nilCounter++
 			mongofaen[i] = 1
 		}
 		if ipVarList[i] != nil && tempBestMaster.String()[:15] > ipVarList[i].String()[:15] {
-		//	fmt.Println("settning new best master")
 			tempBestMaster = ipVarList[i]
 		}
 		//fmt.Println("		i = ",i)
 	}
-//	fmt.Println("nilCounter", nilCounter)
 	var tempSortArray []*UDPAddr = make([]*UDPAddr,N_ELEV)
 	for i:= 0; i < (len(ipVarList) - nilCounter); i++{
-	//	fmt.Println("		i = ", i )
-	//	fmt.Println("before")
 		tempbestIP := ipVarList[0]
-	//	fmt.Println("tempsortarray",tempSortArray)
-	//	fmt.Println("after")
 		minval := 0		
 		for j:= 0; j < len(ipVarList); j++ {
 			fmt.Println(ipVarList[j])
@@ -174,27 +129,13 @@ func Activate_slave() {
 					minval = j
 				}
 			}
-		//	fmt.Println("minval", minval)
-	//		fmt.Println("ipVarList[minval]",ipVarList[minval])
 		}
 		tempSortArray[i] = ipVarList[i]
 		tempSortArray[i] = ipVarList[minval]
-		//	fmt.Println("tempsortarray",tempSortArray)
+
 		mongofaen[minval] = 1
-			//fmt.Println("tempsortarray",tempSortArray)
 		}
 	ipVarList = &tempSortArray
-
-	//fmt.Println("tempbestmaster: ", tempBestMaster)
-	//fmt.Println("localaddr : ", localAddr)
-	//localAddr = tempBestMaster // WE NEED TO FIND THE LOCAL IP SOMEHOW
-	//fmt.Println("localAddr", localAddr)
-	//fmt.Println("EQUALITYYY", localAddr == tempBestMaster)
-	//fmt.Println("tempBestMaster", tempBestMaster)
-	//fmt.Println("before add master")
-	//fmt.Println("1 : ", templocalAddr)
-	//fmt.Println("2 : ",tempBestMaster.String()[:15])
-
 
 	if templocalAddr == tempBestMaster.String()[:15] {
 		m := Master{}
@@ -227,31 +168,21 @@ func Activate_slave() {
 		go Optimalization_init(&m)
 
 	}
-	//fmt.Println("ipvarList", ipVarList)
 	s := Slave{}
-	//fmt.Println("YOLO")
 	
 	for i := 0; i < len(ipVarList) - nilCounter; i++ {
-	//	fmt.Print("ipList[i]",ipVarList[i])
-	//	fmt.Print("templocalAddr",templocalAddr)
 		if ipVarList[i].String()[:15] == templocalAddr {
 			s.Nr = i
-		//	fmt.Println("I am slave nr : ", s.Nr)
 		}
 	}
-	//no else becauce the master is also a "slave"
 	go Check_master(&s)
-	//go Slave_top_Logic(s)
 	go Slave_Order_Outgoing()
 	go Slave_order_arrays_incoming(&s)
 	go Slave_state_updated()
 
-	//fmt.Println("this is slave")
 
 	go Elevator_manager()
 	fmt.Println("go elevator manager")
-	//fmt.Println("end of activeslave")
-	//fmt.Println("before blocking chan")
 	blockingChan := make(chan bool)
 	<-blockingChan
 	//conn.Close()
@@ -297,26 +228,19 @@ func Master_top_logic(m *Master) {
 	for {
 		select {
 		case ipOrder := <-InLogicChans.ToTopLogicOrderChan:
-		//	fmt.Println("we have received from secure sending grid")
-		//	fmt.Println("ipOrder in master top logic: ", ipOrder)
-			//m.ExternalList[ipOrder.Ip] = standardArray
-		//	fmt.Println("I AM IN THE FIRST CASE IN THE TOP LOGIC")
 			if !ipOrder.Ord.TurnOn { // If order executed, just update the internal arrays and the updater will notify when updated. It will use IP smartly
 				for i := 0; i < N_ELEV; i++ {
 					if m.SlaveIp[i] != nil && m.SlaveIp[i].String()[:15] == ipOrder.Ip.String()[:15] {
-					//	fmt.Println("I AM IN THE FIRST CASE IN THE TOP LOGICfmt.Println(I AM IN THE FIRST CASE IN THE TOP LOGIC)")
 						m.ExternalList[i][ipOrder.Ord.Floor][ipOrder.Ord.ButtonType] = ipOrder.Ord.TurnOn
 						m.ExternalList[N_ELEV][ipOrder.Ord.Floor][ipOrder.Ord.ButtonType] = ipOrder.Ord.TurnOn
 						if ipOrder.Ord.TurnOn {
-						//	fmt.Println("MADDAFAKKINGS ERROR MASTER TOP LOGIC")
+						//	fmt.Println("ERROR MASTER TOP LOGIC")
 						}
 					}
 
 				}
-				//fmt.Println(" before ExternalListIsUpdated")
-				InLogicChans.ExternalListIsUpdated <- true //THIS IS THE MAP WE MUST CHANGE. WE SHOULD DO THIS TOGETHER SINCE A LOT OF FUNCTIONALITY USES IT
-				//fmt.Println(" after ExternalListIsUpdated")
-				//ToStateMachineArrayChan <- LocalMaster.AllArrays[LocalMaster.myIP]	WE NEED TO LOOK AT THIS FFS!!!!!!
+				InLogicChans.ExternalListIsUpdated <- true 
+				//ToStateMachineArrayChan <- LocalMaster.AllArrays[LocalMaster.myIP]	
 
 			} else { //else its a button pressed and we need the optimization module decide who gets it
 			//	fmt.Println("               This is else in toplogic")
@@ -343,19 +267,13 @@ func Master_top_logic(m *Master) {
 				}
 
 			}
-			//fmt.Println("											ex list updated")
 			InLogicChans.ExternalListIsUpdated <- true
-			//fmt.Println("										ex list updated end")
-			//sets order
-
-			//sets lights
-
 		}
 	}
 }
 
-//Either copy-paste this or send it to optimization-module in the code where it is handled. May just have a goroutine in this function as well
-func Master_incoming_order_executed() { //RENAME THIS MOTHERFUCKER TO TAKE CARE OF ALL THE SHITS//Generalize this for all orders, either ordered or executed.
+
+func Master_incoming_order_executed() { 
 	countdownChan := make(chan IpOrderMessage)
 	timerMap := make(map[IpOrderMessage]time.Time)
 	var orderExe IpOrderMessage
@@ -372,9 +290,7 @@ func Master_incoming_order_executed() { //RENAME THIS MOTHERFUCKER TO TAKE CARE 
 			timerMap[orderReceived] = time.Now()
 		}
 	}()
-
 	for {
-
 		select {
 		//Updates the queue, if the same kind of messages are sent simultaneously
 		case orderExe = <-ExCommChans.ToMasterOrderExecutedChan: //This is on IP-message-form
