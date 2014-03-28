@@ -81,7 +81,8 @@ func Optimalization_init(m *Master) {
 		}
 		fmt.Println(workloadVector)
 		optOrd.Ip = slaveIps[NrMinWorkloadElevator]
-		fmt.Println("optimalization finished with this one:   ", optOrd)
+		//fmt.Println("optimalization finished with this one:   ", optOrd)
 		ExOptimalChans.OptimizationReturnChan <- optOrd
+		//fmt.Println("Has sent from optimalization")
 	}
 }

@@ -8,15 +8,9 @@ import (
 	"time"
 )
 
-func GetLocalIp() *UDPAddr {
-	addr, _ := ResolveUDPAddr("udp", ":20019")
-	return addr
-}
-
 func Write_to_network() {
 
 	localIp := "129.241.187.255" + PORT
-
 	addr, err := ResolveUDPAddr("udp", localIp)
 	c, err := DialUDP("udp", nil, addr)
 	defer c.Close()
@@ -28,6 +22,7 @@ func Write_to_network() {
 	//fmt.Println("before taking off send to network chan")
 	for {
 		to_writing := <-ExNetChans.ToNetwork
+		
 		//fmt.Println("in for write")
 
 		err = c.SetWriteDeadline(time.Now().Add(20 * time.Millisecond))
@@ -39,7 +34,7 @@ func Write_to_network() {
 		} else {
 			//fmt.Println("no errror in write")
 		}
-		time.Sleep(10 * time.Millisecond)
+		//time.Sleep(10 * time.Millisecond)
 	}
 	//}
 	//fmt.Println("exit write")
@@ -50,6 +45,7 @@ func Receive() { //will error trigger if just read fails? or will it only go on 
 
 	buf := make([]byte, 1024)
 	addr, _ := ResolveUDPAddr("udp", PORT)
+
 	c, err := ListenUDP("udp", addr)
 	for {
 		if err != nil {

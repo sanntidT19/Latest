@@ -82,11 +82,11 @@ func Elevator_manager() {
 	for {
 		select {
 		case currentState = <-InStateMChans.currentStateChan:
-			fmt.Println("before currentState outwards")
+			//fmt.Println("before currentState outwards")
 			ExStateMChans.CurrentStateChan <- currentState
-			fmt.Println("before localcurrent")
+			//fmt.Println("before localcurrent")
 			InStateMChans.localCurrentStateChan <- currentState
-			fmt.Println("after localcurrent")
+			//fmt.Println("after localcurrent")
 		/*
 		   case orderServed := <-InStateMChans.orderServedChan:
 		   ExStateMChans.OrderServedChan <- orderServed
@@ -106,84 +106,168 @@ func Elevator_manager() {
 
 //Going where it is told to go, based on information on where it is. Gotofloor needs to be buttonized.
 func Elevator_worker() {
-	currentDir := driver.Elev_get_direction()
-	currentFloor := driver.Elev_get_floor_sensor_signal() //We know that we are in a floor at this point.
-	// previousFloor := -1 IF WE GET SHIT DONE INCLUDE THIS AND CASES BELOW
-	orderedFloor := -1
-	var goToF int
-	go Motor_control()
-	go Is_floor_reached()
-	// This is where the statemachine is implemented, should it be a select case?
-	for {
-		select {
-		//Slave could send a new command while the statemachine is serving another command, but it should fix the logic by itself
-		// New order
+currentDir := driver.Elev_get_direction()
+currentFloor := driver.Elev_get_floor_sensor_signal() //We know that we are in a floor at this point.
+// previousFloor := -1 IF WE GET SHIT DONE INCLUDE THIS AND CASES BELOW
+orderedFloor := -1
+var goToF int
+go Motor_control()
+go Is_floor_reached()
+var hasSentOrderServed bool
+// This is where the statemachine is implemented, should it be a select case?
+for {
+	select {
+//Slave could send a new command while the statemachine is serving another command, but it should fix the logic by itself
+// New order
 		case goToF = <-InStateMChans.goToFloorChan:
-			fmt.Println("Button pressed sent to elevator worker")
+			hasSentOrderServed = false
+			//fmt.Println("Button pressed sent to elevator worker")
 			orderedFloor = goToF
-			fmt.Println("this is the ordered floor: ", orderedFloor)
+			//fmt.Println("this is the ordered floor: ", orderedFloor)
 			//You are in the floor, order served immediatly, maybe this if can be implemented in another case, but its here for now.
 			if goToF == driver.Elev_get_floor_sensor_signal() {
+				fmt.Println("t|1")
+				hasSentOrderServed = true
 				InStateMChans.speedChan <- SPEED_STOP
+				fmt.Println("t|2")
 				InStateMChans.orderServedChan <- true
+				fmt.Println("t|3")
 				Open_door() //Dont think we want this select loop to do anything else while the door is open. Solve with go open_door() if its not the case
-				//You know you are under/above the current floor
+			//You know you are under/above the current floor
 			} else if goToF < currentFloor {
 				InStateMChans.speedChan <- MAX_SPEED_DOWN
 				currentDir = DIR_DOWN
 				InStateMChans.currentStateChan <- State{currentDir, currentFloor} //Do this for all? Should we send if its already going down (no state changed then)
-				fmt.Println("Elevator worker has sent state Down")
+				//fmt.Println("Elevator worker has sent state Down")
 			} else if goToF > currentFloor {
 				InStateMChans.speedChan <- MAX_SPEED_UP
 				currentDir = DIR_UP
 				InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-				fmt.Println("Elevator worker has sent state Up")
+				//fmt.Println("Elevator worker has sent state Up")
 			}
-		/* //Your last floor was the current floor, but something may have been pulled, so you dont know where you lie relative to it. Cant use direction.
-		   } else if gtf == currentFloor { //this may now go all the time
-		   //Using previousfloor can give you an idea in some cases.
-		   if previousFloor > currentFloor {
-		   InStateMChans.speedChan <- MAX_SPEED_UP
-		   currentDir = DIR_UP
-		   InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-		   } else if previousFloor < currentFloor { //This will also be the case if prevFloor is undefined (-1) They can never be the same.
-		   InStateMChans.speedChan <- MAX_SPEED_DOWN
-		   currentDir = DIR_DOWN
-		   InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-		   }*/
+/* //Your last floor was the current floor, but something may have been pulled, so you dont know where you lie relative to it. Cant use direction.
+} else if gtf == currentFloor { //this may now go all the time
+//Using previousfloor can give you an idea in some cases.
+if previousFloor > currentFloor {
+InStateMChans.speedChan <- MAX_SPEED_UP
+currentDir = DIR_UP
+InStateMChans.currentStateChan <- State{currentDir, currentFloor}
+} else if previousFloor < currentFloor { //This will also be the case if prevFloor is undefined (-1) They can never be the same.
+InStateMChans.speedChan <- MAX_SPEED_DOWN
+currentDir = DIR_DOWN
+InStateMChans.currentStateChan <- State{currentDir, currentFloor}
+}*/
 
-		//New floor is reached and therefore shit is updated
+//New floor is reached and therefore shit is updated
 		case cf := <-InStateMChans.privateSensorChan:
-			//previousFloor = currentFloor
+//previousFloor = currentFloor
 			currentFloor = cf
 			InStateMChans.currentStateChan <- State{currentDir, currentFloor}
-			fmt.Println("ordered floor:", orderedFloor, "should be equal to : ", currentFloor)
-			if orderedFloor == currentFloor {
-				fmt.Println("reached current floor")
+		//	fmt.Println("ordered floor:", orderedFloor, "should be equal to : ", currentFloor)
+			if orderedFloor == currentFloor && !hasSentOrderServed {
+				//fmt.Println("reached current floor")
+				hasSentOrderServed = true
 				InStateMChans.speedChan <- SPEED_STOP
 				InStateMChans.orderServedChan <- true
 				Open_door()
+
 			}
-		}
+		}	
 	}
 
 }
 
-//This function has control over the orderlist and speaks directly to the worker.
 func Send_orders_to_worker(internalList *[N_FLOORS]bool) {
 	var currentOrderList []Order
 	var currentOrderIter int
 	for {
 		select {
 		//New orders sorted, picked. scrap the old one
+			case currentOrderList = <-InStateMChans.ordersCalculatedChan:
+				fmt.Println(currentOrderList)
+				currentOrderIter = 0
+				if newOrder := currentOrderList[currentOrderIter]; newOrder.TurnOn { //All unsetted orders have turnOn = false by default {
+					InStateMChans.goToFloorChan <- newOrder.Floor
+				}
+				//fmt.Println("Currentorderlist: ",currentOrderList)
+			case <-InStateMChans.orderServedChan:
+				orderServed := currentOrderList[currentOrderIter]
+				if orderServed.ButtonType != driver.COMMAND {
+					ExStateMChans.ButtonPressedChan <- Order{orderServed.Floor, orderServed.ButtonType, false}
+				}
+				if orderServed.ButtonType == driver.COMMAND {
+					internalList[orderServed.Floor] = false
+					InStateMChans.commandLightsChan <- *internalList
+				}
+				currentOrderIter++
+				if newOrder := currentOrderList[currentOrderIter]; newOrder.TurnOn { //All unsetted orders have turnOn = false by default {
+					InStateMChans.goToFloorChan <- newOrder.Floor
+				}
+		}
+	}
+}
+
+//This function has control over the orderlist and speaks directly to the worker.
+/*func Send_orders_to_worker(internalList *[N_FLOORS]bool) {
+	var currentOrderList []Order
+	var currentOrderIter int
+	var orderisServedandready bool
+	go func(){
+		for{
+			<-InStateMChans.orderServedChan
+			fmt.Println("order served trigger 1")
+			orderServed := currentOrderList[currentOrderIter]
+			if orderServed.ButtonType != driver.COMMAND {
+				//fmt.Println("IAMSENDINGBUTTONPRESSEDCHANUPWARDS")
+				ExStateMChans.ButtonPressedChan <- Order{orderServed.Floor, orderServed.ButtonType, false}
+			}
+			if orderServed.ButtonType == driver.COMMAND {
+				internalList[orderServed.Floor] = false
+				InStateMChans.commandLightsChan <- *internalList
+			}
+			currentOrderIter++
+			orderisServedandready = true
+		}
+	}()
+	go func(){
+		for{
+			if orderisServedandready{
+				if newOrder := currentOrderList[currentOrderIter]; newOrder.TurnOn { //All unsetted orders have turnOn = false by default {
+						if goToF == driver.Elev_get_floor_sensor_signal() {
+						fmt.Println("t|1")
+						hasSentOrderServed = true
+					InStateMChans.speedChan <- SPEED_STOP
+					fmt.Println("t|2")
+					InStateMChans.orderServedChan <- true
+					fmt.Println("t|3")
+					Open_door()
+					InStateMChans.goToFloorChan <- newOrder.Floor
+					orderisServedandready = false
+				}
+
+			}
+			time.Sleep(25*time.Millisecond)
+		}
+	}()
+
+	for {
+		select {
+		//New orders sorted, picked. scrap the old one
 		case currentOrderList = <-InStateMChans.ordersCalculatedChan:
-			fmt.Println(currentOrderList)
+			fmt.Println("orders calcultated)"
+			//fmt.Println(currentOrderList)
 			currentOrderIter = 0
 			//fmt.Println("Currentorderlist: ",currentOrderList)
-			InStateMChans.goToFloorChan <- currentOrderList[currentOrderIter].Floor
+			if newOrder := currentOrderList[currentOrderIter]; newOrder.TurnOn{
+				//fmt.Println("YOLOMCSWAGGERSON1")
+				InStateMChans.goToFloorChan <- currentOrderList[currentOrderIter].Floor
+				fmt.Println("go to floor chan 3")
+				//fmt.Println("YOLOMCSWAGGERSON2")
+			}/*
 		case <-InStateMChans.orderServedChan:
 			orderServed := currentOrderList[currentOrderIter]
 			if orderServed.ButtonType != driver.COMMAND {
+				fmt.Println("IAMSENDINGBUTTONPRESSEDCHANUPWARDS")
 				ExStateMChans.ButtonPressedChan <- Order{orderServed.Floor, orderServed.ButtonType, false}
 			}
 			if orderServed.ButtonType == driver.COMMAND {
@@ -193,15 +277,16 @@ func Send_orders_to_worker(internalList *[N_FLOORS]bool) {
 			currentOrderIter++
 			if newOrder := currentOrderList[currentOrderIter]; newOrder.TurnOn { //All unsetted orders have turnOn = false by default {
 				InStateMChans.goToFloorChan <- newOrder.Floor
+
 			}
 		}
 	}
-}
+}*/
 
 //Swapping : x,y = y,x
 // logic here, no problemo, motherfucker
 func Choose_next_order() {
-	fmt.Println("choose next order")
+	//fmt.Println("choose next order")
 	var currentFloor, currentDir int
 	var dirIter int //Deciding where to iterate first
 	var orderArray [driver.N_FLOORS][2]bool
@@ -320,7 +405,7 @@ func Button_updater() { //Sending the struct a level up, to the state machine se
 	go func() {
 		for {
 			order := <-InStateMChans.buttonUpdatedChan //Word from above that some button is updated
-			fmt.Println("order received from light_updater")
+			
 			if order.TurnOn {
 				buttonMatrix[order.Floor][order.ButtonType] = 1
 			} else {
@@ -366,14 +451,16 @@ func Light_updater() {
 		select {
 		case lightArray := <-ExStateMChans.LightChan:
 			for i := 0; i < N_FLOORS; i++ {
-				for j := 0; i < N_BUTTONS-1; j++ {
+				for j := 0; j < N_BUTTONS-1; j++ {
+					
 					driver.Elev_set_button_lamp(i, j, lightArray[i][j])
 					InStateMChans.buttonUpdatedChan <- Order{i, j, lightArray[i][j]}
+
 				}
 			}
 		case commandLights := <-InStateMChans.commandLightsChan:
 			for i := 0; i < N_FLOORS; i++ {
-				fmt.Println("Lights ")
+				fmt.Println("commandLights ")
 				driver.Elev_set_button_lamp(i, driver.COMMAND, commandLights[i])
 				InStateMChans.buttonUpdatedChan <- Order{i, driver.COMMAND, commandLights[i]}
 			}

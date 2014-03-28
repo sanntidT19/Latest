@@ -12,7 +12,7 @@ const (
 	N_BUTTONS       = 3
 	MAXWAIT         = 5 * time.Second
 	MAXWAIT_IM_HERE = 50 * time.Millisecond
-	PORT            = ":20019"
+	PORT            = ":20019"  
 	N_FLOORS        = 4
 	N_ELEV          = 3
 	TIMEOFSTOP      = 1 // Time spent in one floor
@@ -209,6 +209,7 @@ type Slave struct {
 }
 
 //MEMBER FUNCTIONS
+/*
 func (m *Master) Set_external_list_order(ip *UDPAddr, floor int, buttonType int, ipOrder IpOrderMessage) {
 	fmt.Println("HEYOOOOOO")
 	var temp [N_FLOORS][2]bool
@@ -235,3 +236,4 @@ func (s Slave) Get_external_list() [][N_FLOORS][2]bool {
 func (s Slave) Overwrite_external_list(newExternalList [][N_FLOORS][2]bool) {
 	s.ExternalList = newExternalList
 }
+*/

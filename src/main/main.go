@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	fmt.Println(GetMyIP())
+	fmt.Println(Get_my_ip())
 	Init_elevator(true)
 	blockingChan := make(chan bool)
 	<-blockingChan

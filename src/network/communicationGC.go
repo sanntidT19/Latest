@@ -18,11 +18,10 @@ type InternalCommunicationChannels struct {
 func Select_send_master() {
 
 	for {
-		fmt.Println("											New select send master")
+		//fmt.Println("											New select send master")
 		select {
 		//Master
 		case externalOrderList := <-ExMasterChans.ToCommOrderListChan:
-			fmt.Println("toCommOrderList Chan content(in select send master)) ", externalOrderList)
 			Send_order(externalOrderList)
 		case ord := <-ExMasterChans.ToCommOrderExecutedConfirmedChan:
 			Send_order_executed_confirmation(ord)
@@ -33,7 +32,7 @@ func Select_send_master() {
 
 		case ipList := <-ExMasterChans.ToCommSendIpListChan:
 			Send_ip_list(ipList)
-			fmt.Println("											End select send master")
+		//	fmt.Println("											End select send master")
 		}
 	}
 }
@@ -56,7 +55,7 @@ func Select_send_slave() {
 		case <-ExSlaveChans.ToCommImSlaveChan:
 			Send_im_slave()
 		case state := <-ExSlaveChans.ToCommUpdatedStateChan:
-			fmt.Println("select_send_slave: state updated", state)
+			//fmt.Println("select_send_slave: state updated", state)
 			Send_update_state(state)
 			//	fmt.Println("after send to network update state")
 
@@ -71,6 +70,7 @@ func internal_comm_chans_init() {
 func Send_ip_list(ipList []*UDPAddr) {
 	byteOrder, _ := Marshal(ipList)
 	prefix, _ := Marshal("sil")
+	fmt.Println("prefix = 				sil")
 	ExNetChans.ToNetwork <- append(prefix, byteOrder...)
 }
 
@@ -89,7 +89,7 @@ func Send_network_init_response(ordList IpOrderList) {
 
 //to slave
 func Send_order(ordList IpOrderList) { //send exectuionOrderList
-	fmt.Println("send Order list :", ordList.ExternalList)
+	//fmt.Println("send Order list :", ordList.ExternalList)
 	byteOrder, _ := Marshal(ordList.ExternalList)
 	prefix, _ := Marshal("ord")
 	ExNetChans.ToNetwork <- append(prefix, byteOrder...)
@@ -114,7 +114,7 @@ func Send_order_executed_confirmation(order IpOrderMessage) {
 	fmt.Println("													order before sent over network:   ", order)
 	byteMessage, _ := Marshal(order.Ord)
 	prefix, _ := Marshal("eco")
-	fmt.Println("func send order executed -eco to network")
+	//fmt.Println("func send order executed -eco to network")
 	ExNetChans.ToNetwork <- append(prefix, byteMessage...)
 }
 
@@ -177,15 +177,15 @@ func Select_receive() {
 
 	for {
 		ipByteArr := <-ExNetChans.ToComm
-		fmt.Println("select receive")
-
+		//fmt.Println("select receive")
 		byteArr := ipByteArr.Barr
+		//fmt.Println("select receive byte array: ", string(byteArr))
 		//fmt.Println("byteArray in select receive", byteArr)
 		//fmt.Println("bytearray: ", string(byteArr))
 		ip := ipByteArr.Ip
 		//fmt.Println("ip ", ip)
 		Decrypt_message(byteArr, ip)
-		fmt.Println("end select receive")
+		//fmt.Println("end select receive")
 	}
 }
 
@@ -195,8 +195,10 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 	case string(message[1:4]) == "sil":
 		noPrefix := message[5:]
 		var ipList []*UDPAddr
+		fmt.Println("in sil asdfasdf")
 		_ = Unmarshal(noPrefix, &ipList)
 		fmt.Println("prefix = sil")
+		//fmt.Println("ipList ", ipList)
 		ExCommChans.ToSlaveReceiveIpListChan <- ipList
 
 	case string(message[1:4]) == "ore":
@@ -215,7 +217,7 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		ExCommChans.ToMasterOrderExecutedChan <- IpOrderMessage{addr, ord}
 
 	case string(message[1:4]) == "ebp":
-		fmt.Println("external button pressed or order executed")
+		//fmt.Println("external button pressed or order executed")
 		noPrefix := message[5:]
 		var ord Order
 		err := Unmarshal(noPrefix, &ord)
@@ -246,15 +248,15 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		var ipOrd IpOrderMessage
 		_ = Unmarshal(noPrefix, &ipOrd)
 		ipOrd.Ip = addr
-		fmt.Println("prefix = ias")
+		//fmt.Println("prefix = ias")
 		ExCommChans.ToMasterImSlaveChan <- ipOrd
+	
 	case string(message[1:4]) == "ini":
-
 		noPrefix := message[5:]
 		var ordList IpOrderList
 		_ = Unmarshal(noPrefix, &ordList)
 		ordList.Ip = addr
-		fmt.Println("prefix = ini")
+		//fmt.Println("prefix = ini")
 		ExCommChans.ToSlaveNetworkInitRespChan <- ordList
 
 	case string(message[1:4]) == "inr":
@@ -262,15 +264,15 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		var ordList IpOrderList
 		_ = Unmarshal(noPrefix, &ordList)
 		ordList.Ip = addr
-		fmt.Println("prefix = inr")
+		//fmt.Println("prefix = inr")
 		ExCommChans.ToSlaveNetworkInitChan <- ordList
 
 	case string(message[1:4]) == "ord":
 		noPrefix := message[5:]
-		fmt.Println("start of ord decrypt :", string(message))
+		//fmt.Println("start of ord decrypt :", string(message))
 		var ordList [][N_FLOORS][2]bool
 		_ = Unmarshal(noPrefix, &ordList)
-		fmt.Println("prefix = ord", ordList)
+		//fmt.Println("prefix = ord", ordList)
 		ExCommChans.ToSlaveOrderListChan <- IpOrderList{addr, ordList}
 
 	case string(message[1:4]) == "sus":
@@ -278,7 +280,7 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 		var ipSta IpState
 		_ = Unmarshal(noPrefix, &ipSta)
 		ipSta.Ip = addr
-		fmt.Println("prefix = ust")
+		//fmt.Println("prefix = ust")
 		fmt.Println(ipSta)
 		ExCommChans.ToSlaveUpdateStateReceivedChan <- ipSta
 
@@ -303,14 +305,14 @@ func Decrypt_message(message []byte, addr *UDPAddr) {
 
 	case string(message[1:4]) == "eco":
 		noPrefix := message[5:]
-		fmt.Println("eco message: ", string(message))
+		//fmt.Println("eco message: ", string(message))
 		var ord Order
 		err := Unmarshal(noPrefix, &ord)
 		if err != nil {
 			fmt.Println(err.Error())
 		}
 		ExCommChans.ToSlaveOrderExecutedConfirmedChan <- IpOrderMessage{nil, ord}
-		fmt.Println("Sent to slave order executed confirm")
+		//fmt.Println("Sent to slave order executed confirm")
 
 	default:
 
